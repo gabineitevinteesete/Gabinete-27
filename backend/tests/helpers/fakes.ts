@@ -100,6 +100,13 @@ export function createFakeLoginAttemptRepo(): LoginAttemptRepository & {
       const limite = Date.now() - sinceMs;
       return attempts.filter((a) => a.telefone === telefone && !a.sucesso && a.createdAt.getTime() >= limite).length;
     },
+    async getOldestRecentFailureAt(telefone, sinceMs) {
+      const limite = Date.now() - sinceMs;
+      const recent = attempts.filter((a) => a.telefone === telefone && !a.sucesso && a.createdAt.getTime() >= limite);
+      if (recent.length === 0) return null;
+      const oldest = recent.reduce((min, a) => (a.createdAt.getTime() < min.createdAt.getTime() ? a : min));
+      return oldest.createdAt;
+    },
   };
 }
 
