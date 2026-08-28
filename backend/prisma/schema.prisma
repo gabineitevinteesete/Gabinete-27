@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CHEFE
+  ASSESSOR_RUA
+  ASSESSOR_GABINETE
+}
+
+enum RequestStatus {
+  RASCUNHO
+  ENVIADA
+  RECEBIDA
+  EM_CONFERENCIA
+  PENDENTE_INFORMACAO
+  PROTOCOLADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  ARQUIVADA
+  RECUSADA
+}
+
+model User {
+  id          String   @id @default(uuid())
+  nome        String
+  telefone    String   @unique
+  pinHash     String?
+  pinDefinido Boolean  @default(false)
+  role        UserRole
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  refreshTokens        RefreshToken[]
+  auditLogsComoAtor    AuditLog[]              @relation("ActorAuditLogs")
+  demandasResponsavel  Request[]               @relation("AssessorResponsavel")
+  historicoAlteracoes  RequestStatusHistory[]  @relation("StatusHistoryUser")
+  observacoesInternas  InternalNote[]          @relation("InternalNoteAuthor")
+  notificacoes         Notification[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  tokenHash   String    @unique
+  expiresAt   DateTime  @db.Timestamptz(3)
+  revokedAt   DateTime? @db.Timestamptz(3)
+  createdByIp String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  telefone  String
+  sucesso   Boolean
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([telefone, createdAt])
+  @@map("login_attempts")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  actor       User?    @relation("ActorAuditLogs", fields: [actorUserId], references: [id])
+  acao        String
+  entidade    String
+  entidadeId  String?
+  detalhes    Json?
+  ip          String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entidade, entidadeId])
+  @@map("audit_logs")
+}
+
+model RequestType {
+  id                        String   @id @default(uuid())
+  nome                      String   @unique
+  ativo                     Boolean  @default(true)
+  exigeDescricaoObrigatoria Boolean  @default(false)
+  createdAt                 DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime @updatedAt @db.Timestamptz(3)
+
+  demandas Request[]
+
+  @@map("request_types")
+}
+
+model Request {
+  id                     String        @id @default(uuid())
+  codigoInterno          String        @unique
+  solicitanteNome        String
+  solicitanteTelefone    String
+  solicitanteNascimento  DateTime?     @db.Timestamptz(3)
+  cep                    String?
+  rua                    String?
+  numero                 String?
+  complemento            String?
+  bairro                 String?
+  cidade                 String?
+  estado                 String?
+  pontoReferencia        String?
+  localExato             String?
+  tituloResumido         String
+  descricao              String
+  descricaoOutroAssunto  String?
+  requestTypeId          String
+  requestType            RequestType   @relation(fields: [requestTypeId], references: [id])
+  assessorResponsavelId  String
+  assessorResponsavel    User          @relation("AssessorResponsavel", fields: [assessorResponsavelId], references: [id])
+  status                 RequestStatus @default(RASCUNHO)
+  numeroProtocolo        String?
+  autorizacaoDados       Boolean       @default(false)
+  arquivadoEm            DateTime?     @db.Timestamptz(3)
+  createdAt              DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime      @updatedAt @db.Timestamptz(3)
+
+  fotos         RequestPhoto[]
+  historico     RequestStatusHistory[]
+  observacoes   InternalNote[]
+  notificacoes  Notification[]
+  consentimento PrivacyConsent?
+
+  @@index([status])
+  @@index([bairro])
+  @@index([assessorResponsavelId])
+  @@map("requests")
+}
+
+model RequestPhoto {
+  id        String   @id @default(uuid())
+  requestId String
+  request   Request  @relation(fields: [requestId], references: [id])
+  url       String
+  publicId  String
+  larguraPx Int?
+  alturaPx  Int?
+  bytes     Int?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId])
+  @@map("request_photos")
+}
+
+model RequestStatusHistory {
+  id             String         @id @default(uuid())
+  requestId      String
+  request        Request        @relation(fields: [requestId], references: [id])
+  statusAnterior RequestStatus?
+  statusNovo     RequestStatus
+  usuarioId      String
+  usuario        User           @relation("StatusHistoryUser", fields: [usuarioId], references: [id])
+  observacao     String?
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId])
+  @@map("request_status_history")
+}
+
+model InternalNote {
+  id        String   @id @default(uuid())
+  requestId String
+  request   Request  @relation(fields: [requestId], references: [id])
+  autorId   String
+  autor     User     @relation("InternalNoteAuthor", fields: [autorId], references: [id])
+  texto     String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId])
+  @@map("internal_notes")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  requestId String?
+  request   Request? @relation(fields: [requestId], references: [id])
+  tipo      String
+  mensagem  String
+  lida      Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, lida])
+  @@map("notifications")
+}
+
+model PrivacyConsent {
+  id          String   @id @default(uuid())
+  requestId   String   @unique
+  request     Request  @relation(fields: [requestId], references: [id])
+  autorizado  Boolean
+  textoVersao String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("privacy_consents")
+}
