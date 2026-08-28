@@ -45,6 +45,9 @@ describe('AuthService.definirPinInicial', () => {
     const { service } = await buildService();
     const result = await service.definirPinInicial({ userId: 'user-novo', novoPin: '482913' });
     expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.user.pinHash).toBeUndefined();
+    }
   });
 
   it('rejeita PIN com formato inválido', async () => {
