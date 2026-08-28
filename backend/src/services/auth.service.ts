@@ -158,7 +158,8 @@ export class AuthService {
       createdByIp: input.ip,
     });
 
-    return { status: 'ok', accessToken, refreshToken: refreshTokenValue, user: { ...user, pinDefinido: true } };
+    const { pinHash: _pinHash, ...publicUser } = user;
+    return { status: 'ok', accessToken, refreshToken: refreshTokenValue, user: { ...publicUser, pinDefinido: true } };
   }
 
   async trocarPin(input: { userId: string; pinAtual: string; novoPin: string }): Promise<TrocarPinResult> {
