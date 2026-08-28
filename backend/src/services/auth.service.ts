@@ -16,6 +16,11 @@ export type LoginResult =
   | { status: 'credenciais_invalidas' }
   | { status: 'inativo' };
 
+export type RefreshResult =
+  | { status: 'ok'; accessToken: string; refreshToken: string }
+  | { status: 'invalido' }
+  | { status: 'usuario_inativo' };
+
 export class AuthService {
   private userRepo: UserRepository;
   private refreshTokenRepo: RefreshTokenRepository;
@@ -80,5 +85,41 @@ export class AuthService {
 
     const { pinHash: _pinHash, ...publicUser } = user;
     return { status: 'ok', accessToken, refreshToken: refreshTokenValue, user: publicUser };
+  }
+
+  async refresh(input: { refreshToken: string; ip?: string }): Promise<RefreshResult> {
+    const tokenHash = hashRefreshTokenValue(input.refreshToken);
+    const stored = await this.refreshTokenRepo.findValidByHash(tokenHash);
+
+    if (!stored || stored.revokedAt || stored.expiresAt.getTime() < Date.now()) {
+      return { status: 'invalido' };
+    }
+
+    const user = await this.userRepo.findById(stored.userId);
+    if (!user || !user.ativo) {
+      await this.refreshTokenRepo.revoke(stored.id);
+      return { status: 'usuario_inativo' };
+    }
+
+    await this.refreshTokenRepo.revoke(stored.id);
+
+    const accessToken = signAccessToken({ sub: user.id, role: user.role });
+    const newRefreshValue = generateRefreshTokenValue();
+    await this.refreshTokenRepo.create({
+      userId: user.id,
+      tokenHash: hashRefreshTokenValue(newRefreshValue),
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      createdByIp: input.ip,
+    });
+
+    return { status: 'ok', accessToken, refreshToken: newRefreshValue };
+  }
+
+  async logout(input: { refreshToken: string }): Promise<void> {
+    const tokenHash = hashRefreshTokenValue(input.refreshToken);
+    const stored = await this.refreshTokenRepo.findValidByHash(tokenHash);
+    if (stored && !stored.revokedAt) {
+      await this.refreshTokenRepo.revoke(stored.id);
+    }
   }
 }
