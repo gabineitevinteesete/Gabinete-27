@@ -37,7 +37,9 @@ export class AuthService {
   async login(input: { telefone: string; pin: string; ip?: string; userAgent?: string }): Promise<LoginResult> {
     const falhasRecentes = await this.loginAttemptRepo.countRecentFailures(input.telefone, JANELA_BLOQUEIO_MS);
     if (falhasRecentes >= LIMITE_TENTATIVAS) {
-      return { status: 'bloqueado', ate: new Date(Date.now() + JANELA_BLOQUEIO_MS) };
+      const oldestFailureAt = await this.loginAttemptRepo.getOldestRecentFailureAt(input.telefone, JANELA_BLOQUEIO_MS);
+      const ate = oldestFailureAt ? new Date(oldestFailureAt.getTime() + JANELA_BLOQUEIO_MS) : new Date(Date.now() + JANELA_BLOQUEIO_MS);
+      return { status: 'bloqueado', ate };
     }
 
     const user = await this.userRepo.findByTelefone(input.telefone);
@@ -53,6 +55,9 @@ export class AuthService {
     }
 
     if (!user.pinDefinido || !user.pinHash) {
+      // Sem PIN ainda: a identificação (telefone ativo) foi validada, então registra como
+      // sucesso para manter a trilha de auditoria completa, mesmo sem PIN conferido.
+      await this.loginAttemptRepo.record({ telefone: input.telefone, sucesso: true, ip: input.ip, userAgent: input.userAgent });
       return { status: 'primeiro_acesso', userId: user.id };
     }
 

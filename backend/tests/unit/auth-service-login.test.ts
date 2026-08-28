@@ -101,4 +101,39 @@ describe('AuthService.login', () => {
     expect(loginAttemptRepo.attempts[0]?.sucesso).toBe(true);
     expect(loginAttemptRepo.attempts[1]?.sucesso).toBe(false);
   });
+
+  it('calcula bloqueado.ate baseado no timestamp da falha mais antiga, não em "agora"', async () => {
+    const user = await buildSeedUser();
+    const { service, loginAttemptRepo } = await buildService([user]);
+
+    // Seed 5 failed attempts com timestamps deliberados no passado (dentro da janela de 15 min)
+    const baseTime = Date.now();
+    const oldestFailureTime = baseTime - 10 * 60 * 1000; // 10 minutos atrás
+
+    loginAttemptRepo.attempts.push(
+      { telefone: user.telefone, sucesso: false, createdAt: new Date(oldestFailureTime) },
+      { telefone: user.telefone, sucesso: false, createdAt: new Date(oldestFailureTime + 1 * 60 * 1000) },
+      { telefone: user.telefone, sucesso: false, createdAt: new Date(oldestFailureTime + 2 * 60 * 1000) },
+      { telefone: user.telefone, sucesso: false, createdAt: new Date(oldestFailureTime + 3 * 60 * 1000) },
+      { telefone: user.telefone, sucesso: false, createdAt: new Date(oldestFailureTime + 4 * 60 * 1000) },
+    );
+
+    const result = await service.login({ telefone: user.telefone, pin: '482913' });
+    expect(result.status).toBe('bloqueado');
+    if (result.status === 'bloqueado') {
+      const expectedAte = new Date(oldestFailureTime + 15 * 60 * 1000);
+      expect(result.ate.getTime()).toBe(expectedAte.getTime());
+    }
+  });
+
+  it('registra primeiro_acesso como tentativa de sucesso na auditoria', async () => {
+    const user = await buildSeedUser({ pinDefinido: false });
+    const { service, loginAttemptRepo } = await buildService([user]);
+
+    await service.login({ telefone: user.telefone, pin: '000000' });
+
+    expect(loginAttemptRepo.attempts).toHaveLength(1);
+    expect(loginAttemptRepo.attempts[0]?.sucesso).toBe(true);
+    expect(loginAttemptRepo.attempts[0]?.telefone).toBe(user.telefone);
+  });
 });
