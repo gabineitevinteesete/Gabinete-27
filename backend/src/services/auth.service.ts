@@ -2,7 +2,7 @@ import type { UserRepository, PublicUser } from '../repositories/user.repository
 import type { RefreshTokenRepository } from '../repositories/refresh-token.repository.js';
 import type { LoginAttemptRepository } from '../repositories/login-attempt.repository.js';
 import type { AuditLogRepository } from '../repositories/audit-log.repository.js';
-import { verifyPin } from '../utils/pin.js';
+import { hashPin, verifyPin, isPinFormatValid, isPinObvious } from '../utils/pin.js';
 import { signAccessToken, generateRefreshTokenValue, hashRefreshTokenValue } from '../utils/jwt.js';
 
 const JANELA_BLOQUEIO_MS = 15 * 60 * 1000;
@@ -20,6 +20,16 @@ export type RefreshResult =
   | { status: 'ok'; accessToken: string; refreshToken: string }
   | { status: 'invalido' }
   | { status: 'usuario_inativo' };
+
+export type DefinirPinResult =
+  | { status: 'ok'; accessToken: string; refreshToken: string; user: PublicUser }
+  | { status: 'pin_invalido'; motivo: 'formato' | 'obvio' }
+  | { status: 'usuario_nao_encontrado' };
+
+export type TrocarPinResult =
+  | { status: 'ok' }
+  | { status: 'pin_atual_incorreto' }
+  | { status: 'pin_novo_invalido'; motivo: 'formato' | 'obvio' };
 
 export class AuthService {
   private userRepo: UserRepository;
@@ -121,5 +131,58 @@ export class AuthService {
     if (stored && !stored.revokedAt) {
       await this.refreshTokenRepo.revoke(stored.id);
     }
+  }
+
+  private validarNovoPin(pin: string): { status: 'pin_invalido'; motivo: 'formato' | 'obvio' } | null {
+    if (!isPinFormatValid(pin)) return { status: 'pin_invalido', motivo: 'formato' };
+    if (isPinObvious(pin)) return { status: 'pin_invalido', motivo: 'obvio' };
+    return null;
+  }
+
+  async definirPinInicial(input: { userId: string; novoPin: string; ip?: string }): Promise<DefinirPinResult> {
+    const user = await this.userRepo.findById(input.userId);
+    if (!user) return { status: 'usuario_nao_encontrado' };
+
+    const erroFormato = this.validarNovoPin(input.novoPin);
+    if (erroFormato) return erroFormato;
+
+    const pinHash = await hashPin(input.novoPin);
+    await this.userRepo.setPinHash(user.id, pinHash);
+
+    const accessToken = signAccessToken({ sub: user.id, role: user.role });
+    const refreshTokenValue = generateRefreshTokenValue();
+    await this.refreshTokenRepo.create({
+      userId: user.id,
+      tokenHash: hashRefreshTokenValue(refreshTokenValue),
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      createdByIp: input.ip,
+    });
+
+    return { status: 'ok', accessToken, refreshToken: refreshTokenValue, user: { ...user, pinDefinido: true } };
+  }
+
+  async trocarPin(input: { userId: string; pinAtual: string; novoPin: string }): Promise<TrocarPinResult> {
+    const user = await this.userRepo.findById(input.userId);
+    if (!user || !user.pinHash || !(await verifyPin(input.pinAtual, user.pinHash))) {
+      return { status: 'pin_atual_incorreto' };
+    }
+
+    const erroFormato = this.validarNovoPin(input.novoPin);
+    if (erroFormato) return { status: 'pin_novo_invalido', motivo: erroFormato.motivo };
+
+    const novoPinHash = await hashPin(input.novoPin);
+    await this.userRepo.setPinHash(user.id, novoPinHash);
+    return { status: 'ok' };
+  }
+
+  async resetarAcesso(input: { chefeId: string; userId: string }): Promise<void> {
+    await this.userRepo.clearPin(input.userId);
+    await this.refreshTokenRepo.revokeAllForUser(input.userId);
+    await this.auditLogRepo.record({
+      actorUserId: input.chefeId,
+      acao: 'RESETAR_ACESSO',
+      entidade: 'User',
+      entidadeId: input.userId,
+    });
   }
 }
