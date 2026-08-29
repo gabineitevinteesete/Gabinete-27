@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { z } from 'zod';
 import { authenticate } from '../../src/middlewares/authenticate.js';
 import { requireRole } from '../../src/middlewares/require-role.js';
 import { errorHandler } from '../../src/middlewares/error-handler.js';
@@ -53,5 +54,34 @@ describe('authenticate + requireRole', () => {
 
     const res = await request(buildApp(userRepo)).get('/so-chefe').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
+  });
+});
+
+describe('errorHandler com ZodError', () => {
+  it('400 com mensagem de validação quando Zod.parse falha', async () => {
+    const app = express();
+    const userRepo = createFakeUserRepo();
+
+    const schema = z.object({
+      nome: z.string().min(2),
+      telefone: z.string().min(10),
+    });
+
+    app.post('/validar', express.json(), (_req, res, next) => {
+      try {
+        schema.parse(_req.body);
+        res.json({ success: true, data: 'ok' });
+      } catch (err) {
+        next(err);
+      }
+    });
+
+    app.use(errorHandler);
+
+    const res = await request(app).post('/validar').send({ nome: 'X', telefone: '123' });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBeTruthy();
+    expect(res.body.error.length).toBeGreaterThan(0);
   });
 });
