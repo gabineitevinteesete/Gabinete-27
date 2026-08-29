@@ -28,10 +28,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        // O /auth/refresh só devolve o accessToken. Sem o /auth/me em seguida, `user` ficaria
+        // null após um reload de página mesmo com cookie de refresh válido, e o PainelLayout
+        // devolveria o usuário para /login.
         const data = await apiClient.request<{ accessToken: string }>('/auth/refresh', { method: 'POST' });
         apiClient.setAccessToken(data.accessToken);
+        const me = await apiClient.request<{ user: PublicUser }>('/auth/me', { auth: true });
+        setUser(me.user);
       } catch {
         apiClient.setAccessToken(null);
+        setUser(null);
       } finally {
         setLoading(false);
       }

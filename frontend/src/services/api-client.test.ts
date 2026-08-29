@@ -46,6 +46,17 @@ describe('apiClient.request', () => {
     expect(initFinal.headers.Authorization).toBe('Bearer token-novo');
   });
 
+  // O POST /auth/logout responde 204 sem corpo: chamar res.json() ali lançava.
+  it('não tenta parsear corpo em respostas 204', async () => {
+    const json = vi.fn(async () => {
+      throw new SyntaxError('Unexpected end of JSON input');
+    });
+    (fetch as any).mockResolvedValueOnce({ ok: true, status: 204, json });
+
+    await expect(apiClient.request('/auth/logout', { method: 'POST' })).resolves.toBeUndefined();
+    expect(json).not.toHaveBeenCalled();
+  });
+
   it('lança ApiError com a mensagem do backend quando a resposta falha', async () => {
     (fetch as any).mockResolvedValueOnce({
       ok: false,
