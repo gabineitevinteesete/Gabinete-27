@@ -11,6 +11,7 @@ const loginLimiter = rateLimit({
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { success: false, error: 'Muitas tentativas. Tente novamente em instantes.' },
 });
 
 function asyncHandler(fn: (req: any, res: any) => Promise<void>) {

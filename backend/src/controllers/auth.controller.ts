@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { AuthService } from '../services/auth.service.js';
-import { loginSchema, definirPinSchema, trocarPinSchema } from '../validators/auth.validators.js';
+import { loginSchema, definirPinSchema, trocarPinSchema, resetarAcessoParamsSchema } from '../validators/auth.validators.js';
 import { getClientIp } from '../utils/request-ip.js';
 import { HttpError } from '../middlewares/error-handler.js';
 
@@ -98,8 +98,7 @@ export function createAuthController(authService: AuthService) {
     },
 
     async resetarAcesso(req: Request, res: Response) {
-      const userId = req.params.id;
-      if (!userId) throw new HttpError(400, 'Parâmetro id ausente');
+      const { id: userId } = resetarAcessoParamsSchema.parse(req.params);
       await authService.resetarAcesso({ chefeId: req.user!.id, userId });
       res.json({ success: true, data: { status: 'ok' } });
     },
