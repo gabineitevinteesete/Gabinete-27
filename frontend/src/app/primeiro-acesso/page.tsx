@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
@@ -9,6 +9,14 @@ import { useAuth } from '@/hooks/use-auth';
 import type { PublicUser } from '@/types/auth';
 
 export default function PrimeiroAcessoPage() {
+  return (
+    <Suspense fallback={null}>
+      <PrimeiroAcessoForm />
+    </Suspense>
+  );
+}
+
+function PrimeiroAcessoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const userId = searchParams.get('userId') ?? '';
