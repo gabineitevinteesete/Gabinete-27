@@ -1,0 +1,12 @@
+// Config usada apenas para verificação de tipos (`npm run typecheck`).
+// O tsconfig.json continua sendo o de build: rootDir "src" e include ["src"], para que
+// `npm run build` emita exatamente a mesma árvore em dist/. Aqui ampliamos o alcance para
+// os testes, o seed e a config do vitest — que o vitest NÃO typechecka em runtime.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "tests", "prisma", "vitest.config.ts"]
+}

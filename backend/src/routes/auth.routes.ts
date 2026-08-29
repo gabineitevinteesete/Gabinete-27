@@ -20,9 +20,10 @@ function asyncHandler(fn: (req: any, res: any) => Promise<void>) {
 
 export function createAuthRouter(deps: { authService: AuthService; userRepo: UserRepository }): Router {
   const router = Router();
-  const controller = createAuthController(deps.authService);
+  const controller = createAuthController(deps.authService, deps.userRepo);
   const auth = authenticate({ userRepo: deps.userRepo });
 
+  router.get('/me', auth, asyncHandler(controller.me));
   router.post('/login', loginLimiter, asyncHandler(controller.login));
   router.post('/primeiro-acesso', loginLimiter, asyncHandler(controller.primeiroAcesso));
   router.post('/refresh', asyncHandler(controller.refresh));

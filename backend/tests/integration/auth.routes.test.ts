@@ -24,6 +24,15 @@ async function criarUsuarioAtivo(overrides: Partial<{ pinDefinido: boolean; ativ
   });
 }
 
+// `res.headers` é tipado como um mapa de strings, mas `set-cookie` chega como array em
+// runtime. Este helper reconcilia os dois e falha alto se o cookie não veio, em vez de
+// deixar um `undefined` silencioso chegar até o `.set('Cookie', ...)`.
+function cookiesDe(res: request.Response): string[] {
+  const bruto = res.headers['set-cookie'] as unknown as string[] | string | undefined;
+  if (!bruto) throw new Error('esperava um cabeçalho set-cookie na resposta');
+  return Array.isArray(bruto) ? bruto : [bruto];
+}
+
 // Estes testes dependem de um Postgres real (via testPrisma) — agrupados sob um único
 // beforeEach que zera as tabelas. O describe de rate limiting abaixo fica FORA deste grupo
 // de propósito: o rate limiter roda antes de qualquer acesso ao banco, então aquele teste
@@ -56,19 +65,71 @@ describe('fluxos que dependem do banco de dados', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe('primeiro_acesso');
     });
+
+    // C1: é assim que o telefone chega do campo mascarado do frontend.
+    it('aceita o telefone no formato mascarado enviado pelo frontend', async () => {
+      await criarUsuarioAtivo();
+      const res = await request(app).post('/auth/login').send({ telefone: '(34) 99999-5000', pin: '482913' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('ok');
+    });
+  });
+
+  // I1: o /auth/refresh só devolve o accessToken; o frontend precisa deste endpoint para
+  // reidratar o usuário depois de um reload de página.
+  describe('GET /auth/me', () => {
+    it('retorna o usuário autenticado', async () => {
+      const usuario = await criarUsuarioAtivo();
+      const login = await request(app).post('/auth/login').send({ telefone: '+5534999995000', pin: '482913' });
+
+      const res = await request(app)
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${login.body.data.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.id).toBe(usuario.id);
+      expect(res.body.data.user.telefone).toBe('+5534999995000');
+      expect(res.body.data.user.pinHash).toBeUndefined();
+    });
+
+    it('retorna 401 sem token de acesso', async () => {
+      const res = await request(app).get('/auth/me');
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // C3: a rota é pública, então precisa recusar usuário desativado ou que já tem PIN.
+  describe('POST /auth/primeiro-acesso', () => {
+    it('recusa definir PIN para usuário desativado', async () => {
+      const usuario = await criarUsuarioAtivo({ ativo: false, pinDefinido: false });
+      const res = await request(app).post('/auth/primeiro-acesso').send({ userId: usuario.id, novoPin: '482913' });
+
+      expect(res.status).toBe(404);
+      const depois = await testPrisma.user.findUniqueOrThrow({ where: { id: usuario.id } });
+      expect(depois.pinDefinido).toBe(false);
+    });
+
+    it('recusa sobrescrever o PIN de um usuário já provisionado', async () => {
+      const usuario = await criarUsuarioAtivo();
+      const res = await request(app).post('/auth/primeiro-acesso').send({ userId: usuario.id, novoPin: '739284' });
+
+      expect(res.status).toBe(404);
+      const depois = await testPrisma.user.findUniqueOrThrow({ where: { id: usuario.id } });
+      expect(depois.pinHash).toBe(usuario.pinHash);
+    });
   });
 
   describe('fluxo completo: login -> refresh -> logout', () => {
     it('gira o refresh token e depois revoga no logout', async () => {
       await criarUsuarioAtivo();
       const login = await request(app).post('/auth/login').send({ telefone: '+5534999995000', pin: '482913' });
-      const cookie = login.headers['set-cookie'];
+      const cookie = cookiesDe(login);
 
       const refreshed = await request(app).post('/auth/refresh').set('Cookie', cookie);
       expect(refreshed.status).toBe(200);
       expect(refreshed.body.data.accessToken).toBeTruthy();
 
-      const novoCookie = refreshed.headers['set-cookie'];
+      const novoCookie = cookiesDe(refreshed);
       const logout = await request(app).post('/auth/logout').set('Cookie', novoCookie);
       expect(logout.status).toBe(204);
 
