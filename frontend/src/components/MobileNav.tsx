@@ -1,6 +1,7 @@
 'use client';
 
 import type { UserRoleValue } from '@/hooks/use-auth';
+import { BotaoSair } from '@/components/BotaoSair';
 
 interface ItemMenu {
   href: string;
@@ -24,6 +25,7 @@ export function MobileNav({ role }: { role: UserRoleValue }) {
           {item.label}
         </a>
       ))}
+      <BotaoSair className="px-3 py-2 text-sm text-primary-dark disabled:opacity-60" />
     </nav>
   );
 }

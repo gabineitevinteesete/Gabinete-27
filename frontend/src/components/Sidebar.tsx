@@ -1,6 +1,7 @@
 'use client';
 
 import type { UserRoleValue } from '@/hooks/use-auth';
+import { BotaoSair } from '@/components/BotaoSair';
 
 interface ItemMenu {
   href: string;
@@ -28,6 +29,7 @@ export function Sidebar({ role }: { role: UserRoleValue }) {
           </a>
         ))}
       </nav>
+      <BotaoSair className="mt-auto rounded-lg px-3 py-2 text-left text-sm hover:bg-white/10 disabled:opacity-60" />
     </aside>
   );
 }

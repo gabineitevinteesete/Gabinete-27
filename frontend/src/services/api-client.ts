@@ -56,6 +56,11 @@ export const apiClient = {
       }
     }
 
+    // 204 não tem corpo — chamar res.json() aqui lança (é o caso do POST /auth/logout).
+    if (res.status === 204) {
+      return undefined as T;
+    }
+
     const body = await res.json();
     if (!res.ok) {
       throw new ApiError(res.status, body.error ?? 'Erro inesperado');

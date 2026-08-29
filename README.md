@@ -82,11 +82,22 @@ Antes do primeiro uso real, configure um `DATABASE_URL` (Neon ou local), rode
 rode a suíte de testes de integração do backend para confirmar que tudo passa contra um
 banco de verdade.
 
+## Dívida técnica conhecida
+
+- **`next@14.2.x` com 2 advisories de severidade alta e sem correção na linha 14.x.** A única
+  remediação é o upgrade major para Next 15/16, que está fora do escopo da Fase 1. Decisão
+  deliberada de adiar (não é um descuido): reavaliar e fazer o upgrade em uma fase posterior,
+  antes do deploy de produção da Fase 5.
+
 ## Variáveis de ambiente
 
 Ver `backend/.env.example` e `frontend/.env.example`. Em produção (Fase 5), `DATABASE_URL`
 aponta para o Neon, `CLOUDINARY_*` para o Cloudinary, e `FRONTEND_URL`/`NEXT_PUBLIC_API_URL`
 para os domínios reais na Vercel e no Render.
+
+Nessa topologia o frontend e o backend ficam em domínios diferentes, então `COOKIE_SAME_SITE`
+precisa ser `"none"` em produção — com `"lax"` o navegador não envia o cookie de refresh nas
+chamadas cross-site e o login não sobrevive a um reload.
 
 ## Privacidade e LGPD
 
