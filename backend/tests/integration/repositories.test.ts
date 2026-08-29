@@ -5,9 +5,7 @@ import { createRefreshTokenRepository } from '../../src/repositories/refresh-tok
 import { createLoginAttemptRepository } from '../../src/repositories/login-attempt.repository.js';
 import { createAuditLogRepository } from '../../src/repositories/audit-log.repository.js';
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: 'postgresql://gabinete:gabinete@localhost:5433/gabinete_test' } },
-});
+const prisma = new PrismaClient();
 
 const userRepo = createUserRepository(prisma);
 const refreshTokenRepo = createRefreshTokenRepository(prisma);
