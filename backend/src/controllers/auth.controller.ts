@@ -1,23 +1,28 @@
 import type { Request, Response } from 'express';
 import type { AuthService } from '../services/auth.service.js';
+import type { UserRepository } from '../repositories/user.repository.js';
 import { loginSchema, definirPinSchema, trocarPinSchema, resetarAcessoParamsSchema } from '../validators/auth.validators.js';
 import { getClientIp } from '../utils/request-ip.js';
+import { loadEnv } from '../config/env.js';
 import { HttpError } from '../middlewares/error-handler.js';
 
 const REFRESH_COOKIE_NAME = 'refreshToken';
 const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function setRefreshCookie(res: Response, value: string) {
+  const sameSite = loadEnv().COOKIE_SAME_SITE;
   res.cookie(REFRESH_COOKIE_NAME, value, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    // SameSite=None só é aceito pelos navegadores junto de Secure, independentemente do
+    // ambiente — sem isso o cookie é descartado silenciosamente.
+    secure: sameSite === 'none' || process.env.NODE_ENV === 'production',
+    sameSite,
     maxAge: REFRESH_COOKIE_MAX_AGE_MS,
     path: '/auth',
   });
 }
 
-export function createAuthController(authService: AuthService) {
+export function createAuthController(authService: AuthService, userRepo: UserRepository) {
   return {
     async login(req: Request, res: Response) {
       const input = loginSchema.parse(req.body);
@@ -99,8 +104,17 @@ export function createAuthController(authService: AuthService) {
 
     async resetarAcesso(req: Request, res: Response) {
       const { id: userId } = resetarAcessoParamsSchema.parse(req.params);
-      await authService.resetarAcesso({ chefeId: req.user!.id, userId });
+      await authService.resetarAcesso({ chefeId: req.user!.id, userId, ip: getClientIp(req) });
       res.json({ success: true, data: { status: 'ok' } });
+    },
+
+    // Usado pelo frontend após um /auth/refresh bem-sucedido para reidratar a sessão em um
+    // reload de página — o refresh só devolve o accessToken, não os dados do usuário.
+    async me(req: Request, res: Response) {
+      const user = await userRepo.findById(req.user!.id);
+      if (!user) throw new HttpError(401, 'Sessão inválida');
+      const { pinHash: _pinHash, ...publicUser } = user;
+      res.json({ success: true, data: { user: publicUser } });
     },
   };
 }

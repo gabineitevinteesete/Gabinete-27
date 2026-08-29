@@ -13,3 +13,9 @@ export const atualizarRoleSchema = z.object({
 export const definirAtivoSchema = z.object({
   ativo: z.boolean(),
 });
+
+// Um :id malformado chegaria até o Prisma e viraria um 500 genérico. Validar aqui devolve
+// 400 com a mesma forma de erro das outras rotas.
+export const usuarioIdParamsSchema = z.object({
+  id: z.string().uuid(),
+});

@@ -1,5 +1,7 @@
 import { hash } from '@node-rs/argon2';
 import { prisma } from '../src/config/prisma.js';
+import { isValidBrazilianPhone, normalizePhone } from '../src/utils/phone.js';
+import { isPinFormatValid, isPinObvious } from '../src/utils/pin.js';
 
 const ASSUNTOS_INICIAIS = [
   'Tapa-buraco',
@@ -36,16 +38,35 @@ async function seedAssuntos() {
 }
 
 async function seedPrimeiroChefe() {
-  const telefone = process.env.SEED_CHEFE_TELEFONE;
+  const telefoneBruto = process.env.SEED_CHEFE_TELEFONE;
   const nome = process.env.SEED_CHEFE_NOME;
   const pin = process.env.SEED_CHEFE_PIN;
 
-  if (!telefone || !nome || !pin) {
+  if (!telefoneBruto || !nome || !pin) {
     console.log(
       'SEED_CHEFE_TELEFONE / SEED_CHEFE_NOME / SEED_CHEFE_PIN não definidos — pulando criação do primeiro chefe.',
     );
     return;
   }
+
+  if (!isValidBrazilianPhone(telefoneBruto)) {
+    console.log('SEED_CHEFE_TELEFONE não é um telefone brasileiro válido — pulando criação do primeiro chefe.');
+    return;
+  }
+
+  if (!isPinFormatValid(pin)) {
+    console.log('SEED_CHEFE_PIN precisa ter exatamente 6 dígitos — pulando criação do primeiro chefe.');
+    return;
+  }
+
+  if (isPinObvious(pin)) {
+    console.log('SEED_CHEFE_PIN é óbvio demais (sequência ou repetição) — pulando criação do primeiro chefe.');
+    return;
+  }
+
+  // Normalizado para casar com o formato gravado por UserService.criarAssessor e com o
+  // telefone normalizado que AuthService.login usa na busca.
+  const telefone = normalizePhone(telefoneBruto);
 
   const existente = await prisma.user.findUnique({ where: { telefone } });
   if (existente) {
@@ -64,7 +85,8 @@ async function seedPrimeiroChefe() {
       pinHash,
     },
   });
-  console.log(`Primeiro chefe criado: ${nome} (${telefone})`);
+  // Sem nome nem telefone no log: nenhum dado pessoal em logs.
+  console.log('Primeiro chefe criado.');
 }
 
 async function main() {
