@@ -18,3 +18,7 @@ export const trocarPinSchema = z.object({
 export const refreshSchema = z.object({
   refreshToken: z.string().min(10),
 });
+
+export const resetarAcessoParamsSchema = z.object({
+  id: z.string().uuid(),
+});
