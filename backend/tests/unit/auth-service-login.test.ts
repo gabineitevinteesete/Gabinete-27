@@ -136,4 +136,39 @@ describe('AuthService.login', () => {
     expect(loginAttemptRepo.attempts[0]?.sucesso).toBe(true);
     expect(loginAttemptRepo.attempts[0]?.telefone).toBe(user.telefone);
   });
+
+  // C1: o frontend envia o telefone no formato mascarado "(34) 99999-0001", enquanto o
+  // usuário é armazenado normalizado ("+5534999990001"). O login precisa normalizar antes
+  // de qualquer busca/registro, senão nenhum login jamais funciona.
+  it('aceita telefone no formato mascarado do frontend, normalizando antes da busca', async () => {
+    const user = await buildSeedUser();
+    const { service } = await buildService([user]);
+
+    const result = await service.login({ telefone: '(34) 99999-0001', pin: '482913' });
+
+    expect(result.status).toBe('ok');
+  });
+
+  it('registra a tentativa sempre com o telefone normalizado', async () => {
+    const user = await buildSeedUser();
+    const { service, loginAttemptRepo } = await buildService([user]);
+
+    await service.login({ telefone: '(34) 99999-0001', pin: '482913' });
+
+    expect(loginAttemptRepo.attempts[0]?.telefone).toBe('+5534999990001');
+  });
+
+  // C2: o bloqueio precisa ser chaveado pelo número normalizado — caso contrário basta
+  // variar a formatação do telefone para zerar o contador de tentativas.
+  it('mantém o bloqueio mesmo quando a formatação do telefone muda', async () => {
+    const user = await buildSeedUser();
+    const { service } = await buildService([user]);
+
+    for (let i = 0; i < 5; i++) {
+      await service.login({ telefone: '+5534999990001', pin: '000001' });
+    }
+
+    const result = await service.login({ telefone: '(34) 99999-0001', pin: '482913' });
+    expect(result.status).toBe('bloqueado');
+  });
 });
