@@ -19,6 +19,12 @@ beforeAll(async () => {
 beforeEach(async () => {
   await prisma.auditLog.deleteMany();
   await prisma.loginAttempt.deleteMany();
+  // requestPhoto/request/requestType precisam ser limpos antes de refreshToken/user por
+  // causa das FKs RESTRICT em requests (assessorResponsavelId, requestTypeId) — desde que
+  // o repositório de demandas passou a popular essas tabelas nos testes de integração.
+  await prisma.requestPhoto.deleteMany();
+  await prisma.request.deleteMany();
+  await prisma.requestType.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 });
