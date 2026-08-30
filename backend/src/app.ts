@@ -9,10 +9,12 @@ import { createUserRepository } from './repositories/user.repository.js';
 import { createRefreshTokenRepository } from './repositories/refresh-token.repository.js';
 import { createLoginAttemptRepository } from './repositories/login-attempt.repository.js';
 import { createAuditLogRepository } from './repositories/audit-log.repository.js';
+import { createRequestTypeRepository } from './repositories/request-type.repository.js';
 import { AuthService } from './services/auth.service.js';
 import { UserService } from './services/user.service.js';
 import { createAuthRouter } from './routes/auth.routes.js';
 import { createUserRouter } from './routes/user.routes.js';
+import { createRequestTypeRouter } from './routes/request-type.routes.js';
 
 export function createApp(prisma: PrismaClient): express.Express {
   const env = loadEnv();
@@ -28,6 +30,7 @@ export function createApp(prisma: PrismaClient): express.Express {
   const refreshTokenRepo = createRefreshTokenRepository(prisma);
   const loginAttemptRepo = createLoginAttemptRepository(prisma);
   const auditLogRepo = createAuditLogRepository(prisma);
+  const requestTypeRepo = createRequestTypeRepository(prisma);
 
   const authService = new AuthService({ userRepo, refreshTokenRepo, loginAttemptRepo, auditLogRepo });
   const userService = new UserService({ userRepo, auditLogRepo });
@@ -38,6 +41,7 @@ export function createApp(prisma: PrismaClient): express.Express {
 
   app.use('/auth', createAuthRouter({ authService, userRepo }));
   app.use('/usuarios', createUserRouter({ userService, userRepo }));
+  app.use('/tipos-demanda', createRequestTypeRouter({ requestTypeRepo, userRepo }));
 
   app.use(errorHandler);
 
