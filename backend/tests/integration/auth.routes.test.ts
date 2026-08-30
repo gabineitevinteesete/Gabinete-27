@@ -200,7 +200,7 @@ describe('rate limiting em POST /auth/login', () => {
   it(
     'retorna 429 com o envelope padrão (JSON) ao exceder o limite de tentativas',
     async () => {
-      // O loginLimiter (limit: 10 por minuto, chaveado por IP) roda ANTES de qualquer acesso
+      // O loginLimiter (limit: 20 por minuto, chaveado por IP) roda ANTES de qualquer acesso
       // ao banco, então este teste não precisa de Postgres disponível — mas as requisições
       // que NÃO são bloqueadas ainda chegam ao controller e tentam falar com o banco (que
       // está indisponível neste ambiente), o que pode demorar até expirar o timeout de conexão.
@@ -210,7 +210,7 @@ describe('rate limiting em POST /auth/login', () => {
       // requisições de outros testes deste arquivo — por isso procuramos QUALQUER resposta 429
       // no lote, em vez de assumir que é sempre a 11ª chamada.
       const respostas = await Promise.all(
-        Array.from({ length: 15 }, () =>
+        Array.from({ length: 25 }, () =>
           request(app).post('/auth/login').send({ telefone: '+5534999995000', pin: '482913' }),
         ),
       );
