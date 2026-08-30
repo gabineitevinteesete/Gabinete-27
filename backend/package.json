@@ -21,6 +21,7 @@
   "dependencies": {
     "@node-rs/argon2": "^1.8.3",
     "@prisma/client": "^5.20.0",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
