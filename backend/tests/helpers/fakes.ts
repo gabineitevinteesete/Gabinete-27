@@ -3,6 +3,7 @@ import type { RefreshTokenRepository } from '../../src/repositories/refresh-toke
 import type { LoginAttemptRepository } from '../../src/repositories/login-attempt.repository.js';
 import type { AuditLogRepository } from '../../src/repositories/audit-log.repository.js';
 import type { UserRoleValue } from '../../src/utils/jwt.js';
+import type { PhotoUploader, FotoEnviada } from '../../src/services/cloudinary-uploader.service.js';
 import { randomUUID } from 'node:crypto';
 
 type StoredUser = PublicUser & { pinHash: string | null };
@@ -118,6 +119,25 @@ export function createFakeAuditLogRepo(): AuditLogRepository & { records: unknow
     records,
     async record(data) {
       records.push(data);
+    },
+  };
+}
+
+export function createFakePhotoUploader(): PhotoUploader & {
+  uploads: { buffer: Buffer; contentType: string; folder: string }[];
+} {
+  const uploads: { buffer: Buffer; contentType: string; folder: string }[] = [];
+  let contador = 0;
+  return {
+    uploads,
+    async upload(input) {
+      uploads.push(input);
+      contador += 1;
+      const resultado: FotoEnviada = {
+        url: `https://res.cloudinary.com/fake/image/upload/v1/${input.folder}/fake-${contador}.jpg`,
+        publicId: `${input.folder}/fake-${contador}`,
+      };
+      return resultado;
     },
   };
 }
