@@ -54,6 +54,12 @@ incremental.
 - `ASSESSOR_RUA`, `ASSESSOR_GABINETE` e `CHEFE` podem criar demandas.
 - `ASSESSOR_RUA` só lista/visualiza as demandas que ele mesmo criou.
 - `ASSESSOR_GABINETE` e `CHEFE` listam/visualizam todas as demandas.
+- `ASSESSOR_RUA` só edita (corrige) as demandas que ele mesmo criou, e só enquanto
+  ainda não foram protocoladas. `ASSESSOR_GABINETE` e `CHEFE` editam qualquer demanda,
+  em qualquer status.
+- Não existe exclusão de demandas nesta fase (nem para assessor de rua, que a
+  especificação original já proíbe explicitamente, nem para os demais papéis) —
+  arquivamento fica para a Fase 3, junto com o resto do fluxo de status.
 - A filtragem por "dono" é aplicada no backend (na query), nunca só escondida no
   front-end.
 
@@ -95,6 +101,14 @@ aplicam a regra de "dono" para `ASSESSOR_RUA`.
 - `GET /demandas/:id` — detalhe completo, incluindo galeria de fotos. Observações
   internas (`internal_notes`) não existem ainda nesta fase (ficam para a Fase 3) — o
   campo simplesmente não aparece na resposta ainda.
+- `PATCH /demandas/:id` — corrige os dados de uma demanda já criada (mesmos campos do
+  cadastro, exceto fotos — editar fotos fica fora desta fase). Regra de permissão:
+  - `ASSESSOR_RUA`: só edita demandas que ele mesmo criou, e só enquanto o status ainda
+    não é `PROTOCOLADA` (nem posterior) — corresponde a "corrigir uma demanda enquanto
+    ela ainda não tiver sido protocolada" da especificação original.
+  - `ASSESSOR_GABINETE` e `CHEFE`: editam qualquer demanda, em qualquer status — já é
+    responsabilidade descrita do assessor de gabinete "conferir e corrigir dados".
+  Tentativa de editar fora dessas regras retorna 403.
 
 ## Front-end
 
@@ -106,7 +120,11 @@ aplicam a regra de "dono" para `ASSESSOR_RUA`.
   2–4 fotos com câmera ou galeria, checkbox de autorização de uso dos dados, aviso de
   privacidade). Botões grandes, mobile-first.
 - `/painel/demandas` — lista com filtros e paginação no servidor.
-- `/painel/demandas/[id]` — detalhe com galeria de fotos.
+- `/painel/demandas/[id]` — detalhe com galeria de fotos. Mostra um botão "Editar"
+  quando o usuário logado tem permissão (ver regra de permissão acima), que leva para
+  `/painel/demandas/[id]/editar`.
+- `/painel/demandas/[id]/editar` — reaproveita os mesmos campos e componentes do
+  formulário de cadastro (exceto fotos), pré-preenchidos com os dados atuais.
 - Componentes novos: seletor de tipo (chips), input de CEP com estado de
   carregando/erro/preenchido, uploader de fotos (câmera/galeria, prévia, remover,
   substituir, compressão client-side antes do envio para reduzir o tamanho do
@@ -131,9 +149,15 @@ Mesmo padrão TDD da Fase 1, agora já podendo rodar de verdade contra o Neon:
 - Integração: criação de demanda (campos obrigatórios, regra do "Outros"), upload de
   fotos (2–4, rejeição de tipo inválido/executável, rejeição de quantidade fora da
   faixa), listagem com paginação e cada filtro, checagem de permissão (assessor de rua
-  não vê demanda de outro assessor de rua; gabinete/chefe veem todas).
+  não vê demanda de outro assessor de rua; gabinete/chefe veem todas), edição (assessor
+  de rua corrige a própria demanda antes de protocolada; é barrado depois de
+  protocolada e ao tentar editar demanda de outro assessor de rua; gabinete/chefe
+  editam qualquer demanda em qualquer status).
 
 ## Fora de escopo desta fase
 
-Fluxo de status além de `ENVIADA` (protocolar, andamento, concluir, etc.), observações
-internas, notificações, exportação em PDF, dashboard/relatórios agregados, PWA offline.
+Exclusão de demandas (nenhum papel apaga demandas — nem nesta fase, nem depois; a
+especificação original só prevê arquivamento pelo chefe, que é Fase 3), edição de
+fotos já enviadas, fluxo de status além de `ENVIADA` (protocolar, andamento, concluir,
+etc.), observações internas, notificações, exportação em PDF, dashboard/relatórios
+agregados, PWA offline.
