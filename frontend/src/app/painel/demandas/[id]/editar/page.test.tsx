@@ -61,6 +61,46 @@ describe('EditarDemandaPage', () => {
     const chamada = vi.mocked(apiClient.request).mock.calls[2];
     expect(chamada?.[0]).toBe('/demandas/demanda-1');
     expect((chamada?.[1] as { method: string }).method).toBe('PATCH');
+    // Tipo comum não deve gravar '' em descricaoOutroAssunto.
+    expect((chamada?.[1] as { body: Record<string, unknown> }).body).not.toHaveProperty('descricaoOutroAssunto');
+  });
+
+  it('mostra o campo de descrição ao trocar o tipo para um que a exige, e o envia no PATCH', async () => {
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce(demandaFake())
+      .mockResolvedValueOnce([
+        { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false },
+        { id: 'tipo-outros', nome: 'Outros', exigeDescricaoObrigatoria: true },
+      ])
+      .mockResolvedValueOnce({ id: 'demanda-1' });
+
+    render(<EditarDemandaPage />);
+    await screen.findByDisplayValue('Buraco na rua');
+
+    expect(screen.queryByLabelText(/descreva o assunto/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Outros' }));
+
+    const campoAssunto = await screen.findByLabelText(/descreva o assunto/i);
+    fireEvent.change(campoAssunto, { target: { value: 'Poste caído' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /salvar alterações/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/painel/demandas/demanda-1'));
+
+    const corpo = (vi.mocked(apiClient.request).mock.calls[2]?.[1] as { body: Record<string, unknown> }).body;
+    expect(corpo.requestTypeId).toBe('tipo-outros');
+    expect(corpo.descricaoOutroAssunto).toBe('Poste caído');
+  });
+
+  it('pré-preenche a descrição do assunto quando a demanda já é de um tipo que a exige', async () => {
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce(demandaFake({ requestTypeId: 'tipo-outros', descricaoOutroAssunto: 'Assunto original' }))
+      .mockResolvedValueOnce([{ id: 'tipo-outros', nome: 'Outros', exigeDescricaoObrigatoria: true }]);
+
+    render(<EditarDemandaPage />);
+
+    expect(await screen.findByDisplayValue('Assunto original')).toBeInTheDocument();
   });
 
   it('mostra erro quando a permissão é negada (403)', async () => {
