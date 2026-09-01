@@ -58,6 +58,12 @@ export function createRequestController(requestService: RequestService) {
       const resultado = await requestService.editar(id, dados, req.user!);
       if (resultado.status === 'nao_encontrada') throw new HttpError(404, 'Demanda não encontrada');
       if (resultado.status === 'sem_permissao') throw new HttpError(403, 'Você não tem permissão para editar esta demanda');
+      if (resultado.status === 'tipo_invalido') {
+        throw new HttpError(400, 'Tipo de demanda inválido ou desativado');
+      }
+      if (resultado.status === 'descricao_outro_obrigatoria') {
+        throw new HttpError(400, 'Descrição do assunto é obrigatória quando o tipo é "Outros"');
+      }
       res.json({ success: true, data: resultado.demanda });
     },
   };

@@ -133,4 +133,69 @@ describe('RequestService.editar', () => {
     const resultado = await service.editar('id-que-nao-existe', {}, { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' });
     expect(resultado.status).toBe('nao_encontrada');
   });
+
+  it('rejeita editar para um requestTypeId inexistente', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+    const resultado = await service.editar(
+      demanda.id,
+      { requestTypeId: 'tipo-que-nao-existe' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+    expect(resultado.status).toBe('tipo_invalido');
+  });
+
+  it('rejeita editar para um requestTypeId desativado', async () => {
+    const requestTypeRepo = createFakeRequestTypeRepo([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+      { id: 'tipo-desativado', nome: 'Desativado', exigeDescricaoObrigatoria: false, ativo: false },
+    ]);
+    const requestRepo = createFakeRequestRepo();
+    const photoUploader = createFakePhotoUploader();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.editar(
+      demanda.id,
+      { requestTypeId: 'tipo-desativado' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+    expect(resultado.status).toBe('tipo_invalido');
+  });
+
+  it('exige descrição do assunto ao trocar para um tipo "Outros" sem descrição já armazenada', async () => {
+    const requestTypeRepo = createFakeRequestTypeRepo([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+      { id: 'tipo-outros', nome: 'Outros', exigeDescricaoObrigatoria: true, ativo: true },
+    ]);
+    const requestRepo = createFakeRequestRepo();
+    const photoUploader = createFakePhotoUploader();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.editar(
+      demanda.id,
+      { requestTypeId: 'tipo-outros' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+    expect(resultado.status).toBe('descricao_outro_obrigatoria');
+  });
+
+  it('permite trocar para um tipo "Outros" quando a descrição é fornecida junto', async () => {
+    const requestTypeRepo = createFakeRequestTypeRepo([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+      { id: 'tipo-outros', nome: 'Outros', exigeDescricaoObrigatoria: true, ativo: true },
+    ]);
+    const requestRepo = createFakeRequestRepo();
+    const photoUploader = createFakePhotoUploader();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.editar(
+      demanda.id,
+      { requestTypeId: 'tipo-outros', descricaoOutroAssunto: 'Detalhe do assunto' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+    expect(resultado.status).toBe('ok');
+  });
 });
