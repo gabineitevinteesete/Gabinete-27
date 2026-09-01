@@ -69,6 +69,20 @@ describe('processarFoto', () => {
     expect(resultado.status).toBe('tipo_invalido');
   });
 
+  it('rejeita uma imagem acima do limite de pixels (bomba de descompressão)', async () => {
+    // ~52 MP num arquivo de poucas centenas de KB: acima do teto de 50 MP do serviço, mas
+    // abaixo do limite padrão do sharp — sem `limitInputPixels` isto decodificaria normalmente
+    // e alocaria ~150 MB de memória nativa.
+    const bomba = await sharp({
+      create: { width: 8000, height: 6500, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .jpeg({ quality: 40 })
+      .toBuffer();
+
+    const resultado = await processarFoto(bomba);
+    expect(resultado.status).toBe('tipo_invalido');
+  });
+
   it('rejeita formatos de imagem não autorizados (ex: GIF)', async () => {
     const gifBuffer = await sharp({
       create: { width: 10, height: 10, channels: 3, background: { r: 1, g: 1, b: 1 } },
