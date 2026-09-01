@@ -5,6 +5,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatório'),
+  // Usado apenas pelo Prisma CLI (migrate) para se conectar sem passar pelo pooler do Neon —
+  // o Prisma Client em runtime nunca lê esta variável, só o schema.prisma declara.
+  DIRECT_URL: z.string().default(''),
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET precisa de ao menos 16 caracteres'),
   // Reservado: hoje o refresh token é opaco e guardado como hash SHA-256 (não é um JWT),
   // então este segredo não é usado. Mantido para não quebrar ambientes já provisionados e
