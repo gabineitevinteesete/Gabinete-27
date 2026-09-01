@@ -18,6 +18,8 @@ const STATUS_LABEL: Record<string, string> = {
   RECUSADA: 'Recusada',
 };
 
+const DEBOUNCE_BAIRRO_MS = 350;
+
 interface ListaDemandasResposta {
   items: DemandaResumo[];
   total: number;
@@ -30,13 +32,20 @@ export default function DemandasPage() {
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
   const [bairro, setBairro] = useState('');
+  const [bairroBuscado, setBairroBuscado] = useState('');
   const [carregando, setCarregando] = useState(true);
   const tamanhoPagina = 20;
+
+  // Debounce do filtro: sem isto cada tecla digitada virava uma requisição à API.
+  useEffect(() => {
+    const timer = setTimeout(() => setBairroBuscado(bairro), DEBOUNCE_BAIRRO_MS);
+    return () => clearTimeout(timer);
+  }, [bairro]);
 
   useEffect(() => {
     setCarregando(true);
     const params = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: String(tamanhoPagina) });
-    if (bairro) params.set('bairro', bairro);
+    if (bairroBuscado) params.set('bairro', bairroBuscado);
 
     apiClient
       .request<ListaDemandasResposta>(`/demandas?${params.toString()}`, { auth: true })
@@ -49,7 +58,7 @@ export default function DemandasPage() {
         setTotal(0);
       })
       .finally(() => setCarregando(false));
-  }, [pagina, bairro]);
+  }, [pagina, bairroBuscado]);
 
   const totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
 
