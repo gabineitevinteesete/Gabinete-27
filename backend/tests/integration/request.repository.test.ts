@@ -80,6 +80,10 @@ describe('RequestRepository.findById', () => {
 });
 
 describe('RequestRepository.list', () => {
+  // Cria vários registros em sequência contra o Postgres real (Neon, via rede); medido em
+  // ~6s neste ambiente, acima do timeout padrão de 5s do Vitest. Timeout ampliado apenas
+  // neste teste em vez de globalmente, para não mascarar travamentos/regressões N+1 em
+  // outros testes do restante da suíte.
   it('filtra por bairro e pagina os resultados', async () => {
     await requestRepo.create(inputBase({ codigoInterno: 'GD-1', bairro: 'Centro' }), [fotoBase]);
     await requestRepo.create(inputBase({ codigoInterno: 'GD-2', bairro: 'Centro' }), [fotoBase]);
@@ -88,8 +92,10 @@ describe('RequestRepository.list', () => {
     const resultado = await requestRepo.list({ bairro: 'Centro' }, { pagina: 1, tamanhoPagina: 10 });
     expect(resultado.total).toBe(2);
     expect(resultado.items).toHaveLength(2);
-  });
+  }, 20000);
 
+  // Cria 5 registros em sequência; medido em ~11s neste ambiente. Mesmo raciocínio acima:
+  // timeout ampliado só aqui, não globalmente.
   it('respeita o tamanho de página', async () => {
     for (let i = 0; i < 5; i++) {
       await requestRepo.create(inputBase({ codigoInterno: `GD-pag-${i}` }), [fotoBase]);
@@ -101,7 +107,7 @@ describe('RequestRepository.list', () => {
 
     const pagina3 = await requestRepo.list({}, { pagina: 3, tamanhoPagina: 2 });
     expect(pagina3.items).toHaveLength(1);
-  });
+  }, 20000);
 
   it('filtra por assessor responsável', async () => {
     const outroAssessor = await prisma.user.create({
