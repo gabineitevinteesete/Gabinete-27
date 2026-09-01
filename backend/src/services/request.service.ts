@@ -14,7 +14,7 @@ import { gerarCodigoInterno } from '../utils/codigo-interno.js';
 import { podeEditarComoAssessorDeRua } from '../utils/request-status.js';
 import { isValidBrazilianPhone, normalizePhone } from '../utils/phone.js';
 
-/** Foto como é servida à API: `url` é sempre uma URL assinada e temporária, nunca a do banco. */
+/** Foto como é servida à API: `url` é sempre assinada na hora, nunca a `url` pública guardada no banco. */
 export interface FotoPublica {
   id: string;
   url: string;
@@ -86,7 +86,7 @@ export class RequestService {
 
   /**
    * Troca a `url` guardada no banco (privada, `type: 'authenticated'`) por uma URL assinada
-   * e temporária, e não expõe o `publicId`. Toda leitura de demanda passa por aqui.
+   * na hora, e não expõe o `publicId`. Toda leitura de demanda passa por aqui.
    */
   private comFotosAssinadas(demanda: RequestDetail): DemandaDetalhe {
     return {
