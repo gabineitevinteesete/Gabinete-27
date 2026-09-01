@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
@@ -32,6 +32,7 @@ export default function EditarDemandaPage() {
   const [localExato, setLocalExato] = useState('');
   const [tituloResumido, setTituloResumido] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [descricaoOutroAssunto, setDescricaoOutroAssunto] = useState('');
 
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -57,10 +58,16 @@ export default function EditarDemandaPage() {
         setLocalExato(demanda.localExato ?? '');
         setTituloResumido(demanda.tituloResumido);
         setDescricao(demanda.descricao);
+        setDescricaoOutroAssunto(demanda.descricaoOutroAssunto ?? '');
       })
       .catch(() => setErroCarregamento(true))
       .finally(() => setCarregando(false));
   }, [params.id]);
+
+  const tipoSelecionado = useMemo(
+    () => tipos.find((t) => t.id === tipoSelecionadoId) ?? null,
+    [tipos, tipoSelecionadoId],
+  );
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -84,6 +91,10 @@ export default function EditarDemandaPage() {
           localExato,
           tituloResumido,
           descricao,
+          // Só acompanha o PATCH quando o tipo escolhido pede descrição — assim um tipo
+          // comum não grava '' nesta coluna, e apagar o texto num tipo "Outros" continua
+          // caindo na validação do backend em vez de passar batido.
+          ...(tipoSelecionado?.exigeDescricaoObrigatoria ? { descricaoOutroAssunto } : {}),
           requestTypeId: tipoSelecionadoId ?? undefined,
         },
       });
@@ -110,6 +121,18 @@ export default function EditarDemandaPage() {
         <p className="mb-2 text-xs font-medium text-gray-600">Tipo de demanda</p>
         <TipoDemandaChips tipos={tipos} selecionadoId={tipoSelecionadoId} onSelecionar={setTipoSelecionadoId} />
       </div>
+
+      {/* Sem este campo, trocar o tipo para um que exige descrição ("Outros") deixava o
+          formulário num beco sem saída: o backend recusava com 400 e não havia onde
+          preencher a descrição. */}
+      {tipoSelecionado?.exigeDescricaoObrigatoria && (
+        <TextField
+          label="Descreva o assunto"
+          name="descricaoOutroAssunto"
+          value={descricaoOutroAssunto}
+          onChange={(e) => setDescricaoOutroAssunto(e.target.value)}
+        />
+      )}
 
       <TextField
         label="Nome do solicitante"
