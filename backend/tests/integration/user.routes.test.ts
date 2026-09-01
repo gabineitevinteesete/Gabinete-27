@@ -8,7 +8,7 @@ const app = buildTestApp();
 
 beforeEach(async () => {
   await resetDb();
-});
+}, 30000); // Neon real via rede: resetDb() passa de 20s sob variação de latência neste ambiente.
 
 afterAll(async () => {
   await testPrisma.$disconnect();
@@ -40,7 +40,7 @@ describe('POST /usuarios', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.telefone).toBe('+5534999997777');
-  });
+  }, 30000); // Neon real via rede: criação de usuário + login (argon2) + POST passa de 20s neste ambiente.
 
   it('assessor não pode criar outro usuário', async () => {
     const { accessToken } = await loginComoAssessor();
@@ -50,7 +50,7 @@ describe('POST /usuarios', () => {
       .send({ nome: 'Novo Assessor', telefone: '(34) 99999-7777', role: 'ASSESSOR_RUA' });
 
     expect(res.status).toBe(403);
-  });
+  }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
 
   it('rejeita telefone duplicado com 409', async () => {
     const { accessToken } = await loginComoChefe();
@@ -65,7 +65,7 @@ describe('POST /usuarios', () => {
       .send({ nome: 'Assessor B', telefone: '(34) 99999-7777', role: 'ASSESSOR_GABINETE' });
 
     expect(res.status).toBe(409);
-  });
+  }, 30000); // Neon real via rede: login + 2 criações de usuário (argon2) passa de 20s neste ambiente.
 });
 
 describe('GET /usuarios, PATCH /usuarios/:id/role e /ativo', () => {
@@ -90,7 +90,7 @@ describe('GET /usuarios, PATCH /usuarios/:id/role e /ativo', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ ativo: false });
     expect(desativado.body.data.ativo).toBe(false);
-  });
+  }, 30000); // Neon real via rede: login + criação + 3 chamadas encadeadas passa de 20s neste ambiente.
 
   // I5: sem validação, um :id malformado chegava ao Prisma e virava um 500 cru.
   it('retorna 400 quando o :id não é um uuid válido', async () => {
@@ -107,7 +107,7 @@ describe('GET /usuarios, PATCH /usuarios/:id/role e /ativo', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ ativo: false });
     expect(ativo.status).toBe(400);
-  });
+  }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
 });
 
 // I7: sem esta proteção o gabinete pode ficar sem nenhum chefe ativo e sem recuperação.
@@ -130,7 +130,7 @@ describe('proteção do último chefe ativo', () => {
     const aindaChefe = await testPrisma.user.findUniqueOrThrow({ where: { id: chefe.id } });
     expect(aindaChefe.ativo).toBe(true);
     expect(aindaChefe.role).toBe('CHEFE');
-  });
+  }, 30000); // Neon real via rede: login + 2 PATCH + leitura de verificação passa de 20s neste ambiente.
 
   it('permite desativar um chefe quando há outro chefe ativo', async () => {
     const { accessToken } = await loginComoChefe();
@@ -146,5 +146,5 @@ describe('proteção do último chefe ativo', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.ativo).toBe(false);
-  });
+  }, 30000); // Neon real via rede: login + criação de chefe + PATCH passa de 20s neste ambiente.
 });

@@ -65,7 +65,7 @@ describe('POST /demandas', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.status).toBe('ENVIADA');
     expect(res.body.data.fotos).toHaveLength(2);
-    expect(res.body.data.codigoInterno).toMatch(/^GD-\d{8}-[0-9A-F]{4}$/);
+    expect(res.body.data.codigoInterno).toMatch(/^GD-\d{8}-[0-9A-F]{8}$/);
   }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
 
   it('rejeita com apenas 1 foto', async () => {
@@ -148,6 +148,62 @@ describe('POST /demandas', () => {
 
     expect(res.status).toBe(400);
   }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
+
+  it('normaliza o telefone do solicitante para E.164', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998010');
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+
+    const res = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .field(camposBase(tipo.id))
+      .attach('fotos', foto1, 'foto1.jpg')
+      .attach('fotos', foto2, 'foto2.jpg');
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.solicitanteTelefone).toBe('+5534999990000');
+  }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
+
+  it('rejeita com 400 um telefone de solicitante inválido', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998011');
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+
+    const res = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .field({ ...camposBase(tipo.id), solicitanteTelefone: '0000000000000000' })
+      .attach('fotos', foto1, 'foto1.jpg')
+      .attach('fotos', foto2, 'foto2.jpg');
+
+    expect(res.status).toBe(400);
+    expect(await testPrisma.request.count()).toBe(0);
+  }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
+
+  it('rejeita com 400 (e não 500) uma imagem acima do limite de pixels', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998012');
+    const foto1 = await fotoValida();
+    // ~52 MP em poucas centenas de KB: acima do teto de 50 MP do processamento de fotos.
+    const bomba = await sharp({
+      create: { width: 8000, height: 6500, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .jpeg({ quality: 40 })
+      .toBuffer();
+
+    const res = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .field(camposBase(tipo.id))
+      .attach('fotos', foto1, 'foto1.jpg')
+      .attach('fotos', bomba, 'bomba.jpg');
+
+    expect(res.status).toBe(400);
+    expect(await testPrisma.request.count()).toBe(0);
+  }, 30000); // Neon real via rede: login + geração/processamento de imagem grande passa de 20s neste ambiente.
 
   it('exige autenticação', async () => {
     const res = await request(app).post('/demandas').field({ tituloResumido: 'x' });

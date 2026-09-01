@@ -9,7 +9,7 @@ const app = buildTestApp();
 beforeEach(async () => {
   await resetDb();
   await testPrisma.requestType.deleteMany();
-});
+}, 30000); // Neon real via rede: deleteMany em sequência passa de 20s sob variação de latência neste ambiente.
 
 afterAll(async () => {
   await testPrisma.$disconnect();
@@ -27,7 +27,7 @@ describe('GET /tipos-demanda', () => {
   it('exige autenticação', async () => {
     const res = await request(app).get('/tipos-demanda');
     expect(res.status).toBe(401);
-  });
+  }, 30000); // Neon real via rede: variação de latência ocasional neste ambiente.
 
   it('lista apenas os tipos ativos, ordenados por nome', async () => {
     await testPrisma.requestType.createMany({
@@ -45,5 +45,5 @@ describe('GET /tipos-demanda', () => {
     expect(res.body.data).toHaveLength(2);
     expect(res.body.data.map((t: { nome: string }) => t.nome)).toEqual(['Outros', 'Tapa-buraco']);
     expect(res.body.data.find((t: { nome: string }) => t.nome === 'Outros').exigeDescricaoObrigatoria).toBe(true);
-  });
+  }, 30000); // Neon real via rede: createMany + login passa de 20s sob variação de latência neste ambiente.
 });
