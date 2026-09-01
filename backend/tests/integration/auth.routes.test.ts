@@ -40,7 +40,7 @@ function cookiesDe(res: request.Response): string[] {
 describe('fluxos que dependem do banco de dados', () => {
   beforeEach(async () => {
     await resetDb();
-  });
+  }, 30000); // Neon real via rede: resetDb() passa de 20s sob variação de latência neste ambiente.
 
   describe('POST /auth/login', () => {
     it('retorna accessToken e cookie de refresh no sucesso', async () => {
@@ -51,20 +51,20 @@ describe('fluxos que dependem do banco de dados', () => {
       expect(res.body.data.status).toBe('ok');
       expect(res.body.data.accessToken).toBeTruthy();
       expect(res.headers['set-cookie']?.[0]).toContain('refreshToken=');
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
 
     it('retorna 401 com PIN errado', async () => {
       await criarUsuarioAtivo();
       const res = await request(app).post('/auth/login').send({ telefone: '+5534999995000', pin: '000001' });
       expect(res.status).toBe(401);
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
 
     it('retorna primeiro_acesso quando o PIN ainda não foi definido', async () => {
       await criarUsuarioAtivo({ pinDefinido: false });
       const res = await request(app).post('/auth/login').send({ telefone: '+5534999995000', pin: '000000' });
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe('primeiro_acesso');
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login passa de 20s neste ambiente.
 
     // C1: é assim que o telefone chega do campo mascarado do frontend.
     it('aceita o telefone no formato mascarado enviado pelo frontend', async () => {
@@ -72,7 +72,7 @@ describe('fluxos que dependem do banco de dados', () => {
       const res = await request(app).post('/auth/login').send({ telefone: '(34) 99999-5000', pin: '482913' });
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe('ok');
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
   });
 
   // I1: o /auth/refresh só devolve o accessToken; o frontend precisa deste endpoint para
@@ -90,12 +90,12 @@ describe('fluxos que dependem do banco de dados', () => {
       expect(res.body.data.user.id).toBe(usuario.id);
       expect(res.body.data.user.telefone).toBe('+5534999995000');
       expect(res.body.data.user.pinHash).toBeUndefined();
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
 
     it('retorna 401 sem token de acesso', async () => {
       const res = await request(app).get('/auth/me');
       expect(res.status).toBe(401);
-    });
+    }, 30000); // Neon real via rede: variação de latência ocasional neste ambiente.
   });
 
   // C3: a rota é pública, então precisa recusar usuário desativado ou que já tem PIN.
@@ -107,7 +107,7 @@ describe('fluxos que dependem do banco de dados', () => {
       expect(res.status).toBe(404);
       const depois = await testPrisma.user.findUniqueOrThrow({ where: { id: usuario.id } });
       expect(depois.pinDefinido).toBe(false);
-    });
+    }, 30000); // Neon real via rede: criação de usuário + leitura de verificação passa de 20s neste ambiente.
 
     it('recusa sobrescrever o PIN de um usuário já provisionado', async () => {
       const usuario = await criarUsuarioAtivo();
@@ -116,7 +116,7 @@ describe('fluxos que dependem do banco de dados', () => {
       expect(res.status).toBe(404);
       const depois = await testPrisma.user.findUniqueOrThrow({ where: { id: usuario.id } });
       expect(depois.pinHash).toBe(usuario.pinHash);
-    });
+    }, 30000); // Neon real via rede: criação de usuário + leitura de verificação passa de 20s neste ambiente.
   });
 
   describe('fluxo completo: login -> refresh -> logout', () => {
@@ -135,14 +135,14 @@ describe('fluxos que dependem do banco de dados', () => {
 
       const apósLogout = await request(app).post('/auth/refresh').set('Cookie', novoCookie);
       expect(apósLogout.status).toBe(401);
-    });
+    }, 30000); // Neon real via rede: login + refresh + logout + refresh em sequência passa de 20s neste ambiente.
   });
 
   describe('POST /auth/trocar-pin', () => {
     it('exige autenticação', async () => {
       const res = await request(app).post('/auth/trocar-pin').send({ pinAtual: '482913', novoPin: '739284' });
       expect(res.status).toBe(401);
-    });
+    }, 30000); // Neon real via rede: variação de latência ocasional neste ambiente.
 
     it('troca o PIN quando autenticado e o PIN atual está correto', async () => {
       await criarUsuarioAtivo();
@@ -155,7 +155,7 @@ describe('fluxos que dependem do banco de dados', () => {
         .send({ pinAtual: '482913', novoPin: '739284' });
 
       expect(res.status).toBe(200);
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login + troca de PIN (argon2) passa de 20s neste ambiente.
   });
 
   describe('POST /auth/usuarios/:id/resetar-acesso', () => {
@@ -179,7 +179,7 @@ describe('fluxos que dependem do banco de dados', () => {
 
       const usuarioAtualizado = await testPrisma.user.findUniqueOrThrow({ where: { id: assessor.id } });
       expect(usuarioAtualizado.pinDefinido).toBe(false);
-    });
+    }, 30000); // Neon real via rede: 2 criações de usuário + 2 logins (argon2) passa de 20s neste ambiente.
 
     it('retorna 400 quando o :id não é um uuid válido', async () => {
       const chefe = await testPrisma.user.create({
@@ -192,7 +192,7 @@ describe('fluxos que dependem do banco de dados', () => {
         .set('Authorization', `Bearer ${loginChefe.body.data.accessToken}`);
 
       expect(res.status).toBe(400);
-    });
+    }, 30000); // Neon real via rede: criação de usuário + login (argon2) passa de 20s neste ambiente.
   });
 });
 
