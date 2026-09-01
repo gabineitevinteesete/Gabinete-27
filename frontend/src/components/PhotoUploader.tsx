@@ -18,6 +18,18 @@ interface PhotoUploaderProps {
 
 const TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp'];
 
+/**
+ * Id local da prévia (serve só de `key` do React e de alvo do botão remover).
+ * `Date.now()` + nome do arquivo colidia com dois arquivos de mesmo nome processados no
+ * mesmo milissegundo — o que acontece de verdade ao selecionar várias fotos de uma vez.
+ */
+function gerarId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function PhotoUploader({ fotos, onChange, minimo = 2, maximo = 4 }: PhotoUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -36,15 +48,27 @@ export function PhotoUploader({ fotos, onChange, minimo = 2, maximo = 4 }: Photo
     }
 
     const novasFotos: FotoSelecionada[] = [];
-    for (const arquivo of selecionados) {
-      const blob = await comprimirImagem(arquivo);
-      novasFotos.push({ id: `${Date.now()}-${arquivo.name}`, blob, previewUrl: URL.createObjectURL(blob) });
+    try {
+      for (const arquivo of selecionados) {
+        const blob = await comprimirImagem(arquivo);
+        novasFotos.push({ id: gerarId(), blob, previewUrl: URL.createObjectURL(blob) });
+      }
+    } catch {
+      // A compressão roda em canvas e pode falhar com um arquivo corrompido ou grande
+      // demais para o dispositivo. Sem este catch a rejeição ficava sem tratamento e o
+      // usuário não via nada acontecer.
+      novasFotos.forEach((foto) => URL.revokeObjectURL(foto.previewUrl));
+      setErro('Não foi possível processar uma das fotos.');
+      return;
     }
 
     onChange([...fotos, ...novasFotos]);
   }
 
   function remover(id: string) {
+    const removida = fotos.find((foto) => foto.id === id);
+    // O blob fica vivo até a aba fechar se ninguém revogar a URL.
+    if (removida) URL.revokeObjectURL(removida.previewUrl);
     onChange(fotos.filter((foto) => foto.id !== id));
   }
 
