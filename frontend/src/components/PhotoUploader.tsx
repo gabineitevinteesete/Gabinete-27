@@ -59,7 +59,7 @@ export function PhotoUploader({ fotos, onChange, minimo = 2, maximo = 4 }: Photo
               type="button"
               onClick={() => remover(foto.id)}
               aria-label="Remover foto"
-              className="absolute right-0 top-0 bg-black/60 px-1 text-xs text-white"
+              className="absolute -right-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-xs text-white"
             >
               ×
             </button>
@@ -69,6 +69,7 @@ export function PhotoUploader({ fotos, onChange, minimo = 2, maximo = 4 }: Photo
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
+            aria-label="Adicionar foto"
             className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-primary text-primary"
           >
             +
