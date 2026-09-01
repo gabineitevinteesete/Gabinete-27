@@ -18,6 +18,9 @@ export default function DemandaDetalhePage() {
     apiClient
       .request<DemandaDetalhe>(`/demandas/${params.id}`, { auth: true })
       .then(setDemanda)
+      // `demanda` continua null e o branch de erro abaixo já cobre a tela; o catch existe
+      // só para a falha não virar uma promise rejeitada sem tratamento.
+      .catch(() => {})
       .finally(() => setCarregando(false));
   }, [params.id]);
 

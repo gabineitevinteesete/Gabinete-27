@@ -45,6 +45,24 @@ describe('DemandasPage', () => {
 
     fireEvent.change(screen.getByLabelText(/bairro/i), { target: { value: 'Centro' } });
 
+    // O filtro é debounced (350ms), então a busca não sai no mesmo tick da digitação.
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
+    const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
+    expect(url).toContain('bairro=Centro');
+  });
+
+  it('não dispara uma requisição por tecla digitada no filtro de bairro', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+
+    const campo = screen.getByLabelText(/bairro/i);
+    fireEvent.change(campo, { target: { value: 'C' } });
+    fireEvent.change(campo, { target: { value: 'Ce' } });
+    fireEvent.change(campo, { target: { value: 'Cen' } });
+    fireEvent.change(campo, { target: { value: 'Centro' } });
+
     await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
     const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
     expect(url).toContain('bairro=Centro');
