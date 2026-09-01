@@ -9,10 +9,5 @@ export default defineConfig({
     // resetDb()/deleteMany()); rodar arquivos em paralelo faz um arquivo apagar os dados
     // que outro está usando no meio do teste. Serializa a execução dos arquivos.
     fileParallelism: false,
-    // O Postgres real (Neon) usado nos testes de integração fica na rede; testes que
-    // criam vários registros em sequência (ex.: paginação) podem passar dos 5s padrão
-    // do Vitest. Damos mais folga para não confundir latência de rede com regressão.
-    testTimeout: 20000,
-    hookTimeout: 20000,
   },
 });
