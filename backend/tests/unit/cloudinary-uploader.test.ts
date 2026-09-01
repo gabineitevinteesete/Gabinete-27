@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createCloudinaryUploader, VALIDADE_URL_ASSINADA_SEGUNDOS } from '../../src/services/cloudinary-uploader.service.js';
+import { createCloudinaryUploader } from '../../src/services/cloudinary-uploader.service.js';
 
 vi.mock('cloudinary', () => {
   const uploadStream = vi.fn((_options: unknown, callback: (error: unknown, result: unknown) => void) => {
@@ -53,8 +53,7 @@ describe('createCloudinaryUploader', () => {
     expect(opcoes.resource_type).toBe('image');
   });
 
-  it('gera uma url assinada, temporária e do tipo authenticated a partir do publicId', () => {
-    const antes = Math.floor(Date.now() / 1000);
+  it('gera uma url assinada do tipo authenticated a partir do publicId', () => {
     const uploader = createCloudinaryUploader({ cloudName: 'demo', apiKey: 'key', apiSecret: 'secret' });
 
     const url = uploader.urlAssinada('demandas/abc123');
@@ -66,6 +65,5 @@ describe('createCloudinaryUploader', () => {
     expect(opcoes.sign_url).toBe(true);
     expect(opcoes.type).toBe('authenticated');
     expect(opcoes.secure).toBe(true);
-    expect(opcoes.expires_at as number).toBeGreaterThanOrEqual(antes + VALIDADE_URL_ASSINADA_SEGUNDOS);
   });
 });

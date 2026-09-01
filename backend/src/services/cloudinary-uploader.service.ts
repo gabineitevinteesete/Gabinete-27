@@ -9,15 +9,15 @@ export interface FotoEnviada {
 export interface PhotoUploader {
   upload(input: { buffer: Buffer; contentType: string; folder: string }): Promise<FotoEnviada>;
   /**
-   * URL de entrega assinada e temporária para um `publicId` já armazenado. As fotos são
-   * enviadas como `type: 'authenticated'`, então a URL pública não existe: cada leitura da
-   * API precisa assinar de novo. Não guarde o retorno — ele expira.
+   * URL de entrega assinada para um `publicId` já armazenado. As fotos são enviadas como
+   * `type: 'authenticated'`, então a URL pública não existe — só quem tem a assinatura acessa.
+   * A assinatura do Cloudinary NÃO expira sozinha (a API `cloudinary.url()` não suporta
+   * expiração em URLs de entrega — isso exigiria o recurso pago "token-based authentication").
+   * Não guarde o retorno em lugar persistente: ele é gerado a cada leitura da API para não
+   * depender de um valor antigo, mas o link em si continua válido se vazar.
    */
   urlAssinada(publicId: string): string;
 }
-
-/** Validade da URL assinada. Curta de propósito: é gerada a cada leitura da API. */
-export const VALIDADE_URL_ASSINADA_SEGUNDOS = 60 * 60;
 
 export function createCloudinaryUploader(config: {
   cloudName: string;
@@ -57,7 +57,6 @@ export function createCloudinaryUploader(config: {
         resource_type: 'image',
         sign_url: true,
         secure: true,
-        expires_at: Math.floor(Date.now() / 1000) + VALIDADE_URL_ASSINADA_SEGUNDOS,
       });
     },
   };
