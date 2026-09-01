@@ -143,10 +143,15 @@ export function createFakePhotoUploader(): PhotoUploader & {
       uploads.push(input);
       contador += 1;
       const resultado: FotoEnviada = {
-        url: `https://res.cloudinary.com/fake/image/upload/v1/${input.folder}/fake-${contador}.jpg`,
+        url: `https://res.cloudinary.com/fake/image/authenticated/v1/${input.folder}/fake-${contador}.jpg`,
         publicId: `${input.folder}/fake-${contador}`,
       };
       return resultado;
+    },
+    // A assinatura real do Cloudinary é exercitada no teste unitário do uploader; aqui basta
+    // uma URL reconhecivelmente "assinada" para provar que a API não devolve a url do banco.
+    urlAssinada(publicId) {
+      return `https://res.cloudinary.com/fake/image/authenticated/s--fakesig--/${publicId}`;
     },
   };
 }
@@ -206,7 +211,13 @@ export function createFakeRequestRepo(): RequestRepository & {
         descricaoOutroAssunto: input.descricaoOutroAssunto ?? null,
         autorizacaoDados: input.autorizacaoDados,
         updatedAt: new Date(),
-        fotos: fotos.map((f, i) => ({ id: `foto-${contador}-${i}`, url: f.url, larguraPx: f.larguraPx, alturaPx: f.alturaPx })),
+        fotos: fotos.map((f, i) => ({
+          id: `foto-${contador}-${i}`,
+          url: f.url,
+          publicId: f.publicId,
+          larguraPx: f.larguraPx,
+          alturaPx: f.alturaPx,
+        })),
       };
       store.push(detalhe);
       return detalhe;

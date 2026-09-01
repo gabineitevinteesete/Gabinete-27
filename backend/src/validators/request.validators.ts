@@ -2,6 +2,17 @@ import { z } from 'zod';
 
 const booleanDeString = z.preprocess((valor) => valor === 'true' || valor === true, z.boolean());
 
+/**
+ * Campo de endereço opcional. String vazia vira "não informado" em vez de virar `''` no
+ * Postgres: o formulário de edição manda todos os campos de endereço em todo PATCH, e sem
+ * isso cada salvamento transformaria um campo nulo em string vazia, quebrando os fallbacks
+ * do tipo `bairro ?? 'sem bairro'`.
+ * Não vale para `localExato`, `descricao*` e afins: lá o mínimo de caracteres é intencional
+ * e uma string vazia deve continuar sendo erro de validação, não um campo silenciosamente
+ * ignorado.
+ */
+const enderecoOpcional = z.preprocess((valor) => (valor === '' ? undefined : valor), z.string().optional());
+
 const statusEnum = z.enum([
   'RASCUNHO',
   'ENVIADA',
@@ -19,14 +30,14 @@ export const criarDemandaSchema = z.object({
   solicitanteNome: z.string().min(2),
   solicitanteTelefone: z.string().min(10),
   solicitanteNascimento: z.coerce.date().optional(),
-  cep: z.string().optional(),
-  rua: z.string().optional(),
-  numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
-  estado: z.string().optional(),
-  pontoReferencia: z.string().optional(),
+  cep: enderecoOpcional,
+  rua: enderecoOpcional,
+  numero: enderecoOpcional,
+  complemento: enderecoOpcional,
+  bairro: enderecoOpcional,
+  cidade: enderecoOpcional,
+  estado: enderecoOpcional,
+  pontoReferencia: enderecoOpcional,
   localExato: z.string().min(2),
   tituloResumido: z.string().min(2),
   descricao: z.string().min(2),

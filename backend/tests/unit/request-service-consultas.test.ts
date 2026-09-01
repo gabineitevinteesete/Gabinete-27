@@ -181,6 +181,59 @@ describe('RequestService.editar', () => {
     expect(resultado.status).toBe('descricao_outro_obrigatoria');
   });
 
+  it('rejeita apagar a descrição de uma demanda que já é "Outros", mesmo sem mandar requestTypeId', async () => {
+    const requestTypeRepo = createFakeRequestTypeRepo([
+      { id: 'tipo-outros', nome: 'Outros', exigeDescricaoObrigatoria: true, ativo: true },
+    ]);
+    const requestRepo = createFakeRequestRepo();
+    const photoUploader = createFakePhotoUploader();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const demanda = await requestRepo.create(
+      {
+        codigoInterno: 'GD-outros',
+        solicitanteNome: 'Solicitante',
+        solicitanteTelefone: '+5534999990000',
+        tituloResumido: 'Título',
+        descricao: 'Descrição',
+        descricaoOutroAssunto: 'Assunto original',
+        requestTypeId: 'tipo-outros',
+        assessorResponsavelId: 'user-eu',
+        autorizacaoDados: true,
+      },
+      [{ url: 'https://cdn/a.jpg', publicId: 'a', larguraPx: 10, alturaPx: 10, bytes: 100 }],
+    );
+
+    const resultado = await service.editar(
+      demanda.id,
+      { descricaoOutroAssunto: '' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+
+    expect(resultado.status).toBe('descricao_outro_obrigatoria');
+  });
+
+  it('normaliza o telefone do solicitante ao editar e rejeita um telefone inválido', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const invalido = await service.editar(
+      demanda.id,
+      { solicitanteTelefone: '123' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+    expect(invalido.status).toBe('telefone_invalido');
+
+    const ok = await service.editar(
+      demanda.id,
+      { solicitanteTelefone: '(34) 98888-1234' },
+      { id: 'user-eu', role: 'ASSESSOR_RUA' },
+    );
+    expect(ok.status).toBe('ok');
+    if (ok.status === 'ok') {
+      expect(ok.demanda.solicitanteTelefone).toBe('+5534988881234');
+    }
+  });
+
   it('permite trocar para um tipo "Outros" quando a descrição é fornecida junto', async () => {
     const requestTypeRepo = createFakeRequestTypeRepo([
       { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },

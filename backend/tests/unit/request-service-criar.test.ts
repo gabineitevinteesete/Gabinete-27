@@ -106,6 +106,47 @@ describe('RequestService.criar', () => {
     expect(resultado.status).toBe('autorizacao_obrigatoria');
   });
 
+  it('normaliza o telefone do solicitante para E.164 antes de persistir', async () => {
+    const { service, requestRepo } = buildService([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+    ]);
+    const fotos = [await fotoValida(), await fotoValida()];
+
+    const resultado = await service.criar(inputBase({ fotos, solicitanteTelefone: '(34) 99999-0000' }));
+
+    expect(resultado.status).toBe('ok');
+    expect(requestRepo.created[0]?.input.solicitanteTelefone).toBe('+5534999990000');
+  });
+
+  it('rejeita um telefone de solicitante inválido, sem chegar a fazer upload de nada', async () => {
+    const { service, photoUploader } = buildService([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+    ]);
+    const fotos = [await fotoValida(), await fotoValida()];
+
+    const resultado = await service.criar(inputBase({ fotos, solicitanteTelefone: '0000000' }));
+
+    expect(resultado.status).toBe('telefone_invalido');
+    expect(photoUploader.uploads).toHaveLength(0);
+  });
+
+  it('devolve as fotos com url assinada, nunca a url armazenada no banco', async () => {
+    const { service } = buildService([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+    ]);
+    const fotos = [await fotoValida(), await fotoValida()];
+
+    const resultado = await service.criar(inputBase({ fotos }));
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status === 'ok') {
+      for (const foto of resultado.demanda.fotos) {
+        expect(foto.url).toContain('s--fakesig--');
+        expect(foto).not.toHaveProperty('publicId');
+      }
+    }
+  });
+
   it('rejeita uma foto que não é uma imagem de verdade, sem chegar a fazer upload de nada', async () => {
     const { service, photoUploader } = buildService([
       { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
