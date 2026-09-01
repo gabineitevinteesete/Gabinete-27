@@ -12,7 +12,7 @@ beforeEach(async () => {
   await testPrisma.requestPhoto.deleteMany();
   await testPrisma.request.deleteMany();
   await testPrisma.requestType.deleteMany();
-}, 20000);
+}, 30000); // Neon real via rede: deleteMany em sequência passa de 20s sob variação de latência neste ambiente.
 
 afterAll(async () => {
   await testPrisma.$disconnect();
@@ -66,7 +66,7 @@ describe('POST /demandas', () => {
     expect(res.body.data.status).toBe('ENVIADA');
     expect(res.body.data.fotos).toHaveLength(2);
     expect(res.body.data.codigoInterno).toMatch(/^GD-\d{8}-[0-9A-F]{4}$/);
-  }, 20000);
+  }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
 
   it('rejeita com apenas 1 foto', async () => {
     const tipo = await criarTipo();
@@ -80,7 +80,7 @@ describe('POST /demandas', () => {
       .attach('fotos', foto1, 'foto1.jpg');
 
     expect(res.status).toBe(400);
-  }, 20000);
+  }, 30000); // Neon real via rede: login + upload/processamento de foto passa de 20s neste ambiente.
 
   it('rejeita quando o arquivo enviado não é uma imagem de verdade', async () => {
     const tipo = await criarTipo();
@@ -98,7 +98,40 @@ describe('POST /demandas', () => {
 
     const demandas = await testPrisma.request.count();
     expect(demandas).toBe(0);
-  }, 20000);
+  }, 30000); // Neon real via rede: login + upload/processamento de foto passa de 20s neste ambiente.
+
+  it('rejeita mais de 4 fotos (limite do multer) com 400', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor();
+    const fotos = await Promise.all([fotoValida(), fotoValida(), fotoValida(), fotoValida(), fotoValida()]);
+
+    let req = request(app).post('/demandas').set('Authorization', `Bearer ${accessToken}`).field(camposBase(tipo.id));
+    fotos.forEach((foto, i) => {
+      req = req.attach('fotos', foto, `foto${i}.jpg`);
+    });
+    const res = await req;
+
+    expect(res.status).toBe(400);
+
+    const demandas = await testPrisma.request.count();
+    expect(demandas).toBe(0);
+  }, 30000); // Neon real via rede: login + processamento de 5 fotos passa de 20s neste ambiente.
+
+  it('rejeita quando o campo de arquivo tem nome diferente de "fotos"', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor();
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+
+    const res = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .field(camposBase(tipo.id))
+      .attach('arquivoErrado', foto1, 'foto1.jpg')
+      .attach('arquivoErrado', foto2, 'foto2.jpg');
+
+    expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede: login passa de 20s neste ambiente.
 
   it('exige descrição do assunto quando o tipo é "Outros"', async () => {
     const tipo = await criarTipo(true);
@@ -114,12 +147,12 @@ describe('POST /demandas', () => {
       .attach('fotos', foto2, 'foto2.jpg');
 
     expect(res.status).toBe(400);
-  }, 20000);
+  }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
 
   it('exige autenticação', async () => {
     const res = await request(app).post('/demandas').field({ tituloResumido: 'x' });
     expect(res.status).toBe(401);
-  });
+  }, 30000); // Neon real via rede: variação de latência ocasional neste ambiente.
 });
 
 describe('GET /demandas e GET /demandas/:id', () => {
@@ -153,7 +186,7 @@ describe('GET /demandas e GET /demandas/:id', () => {
 
     const detalheDeOutro = await request(app).get(`/demandas/${minha.body.data.id}`).set('Authorization', `Bearer ${tokenOutro}`);
     expect(detalheDeOutro.status).toBe(403);
-  }, 20000);
+  }, 30000); // Neon real via rede: 2 logins + 2 uploads/processamentos de foto passa de 20s neste ambiente.
 
   it('gabinete lista e acessa qualquer demanda', async () => {
     const tipo = await criarTipo();
@@ -174,7 +207,7 @@ describe('GET /demandas e GET /demandas/:id', () => {
 
     const detalhe = await request(app).get(`/demandas/${criada.body.data.id}`).set('Authorization', `Bearer ${tokenGabinete}`);
     expect(detalhe.status).toBe(200);
-  }, 20000);
+  }, 30000); // Neon real via rede: 2 logins + upload/processamento de foto passa de 20s neste ambiente.
 });
 
 describe('PATCH /demandas/:id', () => {
@@ -198,7 +231,7 @@ describe('PATCH /demandas/:id', () => {
 
     expect(editada.status).toBe(200);
     expect(editada.body.data.tituloResumido).toBe('Título corrigido');
-  }, 20000);
+  }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
 
   it('retorna 400 quando o id não é um uuid válido', async () => {
     const { accessToken } = await loginComoAssessor();
@@ -207,5 +240,26 @@ describe('PATCH /demandas/:id', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ tituloResumido: 'x' });
     expect(res.status).toBe(400);
-  }, 20000);
+  }, 30000); // Neon real via rede: login passa de 20s neste ambiente.
+
+  it('retorna 400 ao editar para um requestTypeId inexistente', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor();
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+
+    const criada = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .field(camposBase(tipo.id))
+      .attach('fotos', foto1, 'a.jpg')
+      .attach('fotos', foto2, 'b.jpg');
+
+    const editada = await request(app)
+      .patch(`/demandas/${criada.body.data.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ requestTypeId: '00000000-0000-0000-0000-000000000000' });
+
+    expect(editada.status).toBe(400);
+  }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
 });

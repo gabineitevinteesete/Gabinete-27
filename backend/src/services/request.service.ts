@@ -56,7 +56,9 @@ export type BuscarDemandaResultado =
 export type EditarDemandaResultado =
   | { status: 'ok'; demanda: RequestDetail }
   | { status: 'nao_encontrada' }
-  | { status: 'sem_permissao' };
+  | { status: 'sem_permissao' }
+  | { status: 'tipo_invalido' }
+  | { status: 'descricao_outro_obrigatoria' };
 
 export class RequestService {
   private requestRepo: RequestRepository;
@@ -167,6 +169,18 @@ export class RequestService {
       const aindaEditavel = podeEditarComoAssessorDeRua(demanda.status);
       if (!dono || !aindaEditavel) {
         return { status: 'sem_permissao' };
+      }
+    }
+
+    if (input.requestTypeId !== undefined) {
+      const tipo = await this.requestTypeRepo.findById(input.requestTypeId);
+      if (!tipo || !tipo.ativo) {
+        return { status: 'tipo_invalido' };
+      }
+      const descricaoEfetiva =
+        input.descricaoOutroAssunto !== undefined ? input.descricaoOutroAssunto : demanda.descricaoOutroAssunto;
+      if (tipo.exigeDescricaoObrigatoria && !descricaoEfetiva?.trim()) {
+        return { status: 'descricao_outro_obrigatoria' };
       }
     }
 
