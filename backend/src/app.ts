@@ -9,12 +9,19 @@ import { createUserRepository } from './repositories/user.repository.js';
 import { createRefreshTokenRepository } from './repositories/refresh-token.repository.js';
 import { createLoginAttemptRepository } from './repositories/login-attempt.repository.js';
 import { createAuditLogRepository } from './repositories/audit-log.repository.js';
+import { createRequestTypeRepository } from './repositories/request-type.repository.js';
+import type { PhotoUploader } from './services/cloudinary-uploader.service.js';
+import { createCloudinaryUploader } from './services/cloudinary-uploader.service.js';
+import { createRequestRepository } from './repositories/request.repository.js';
+import { RequestService } from './services/request.service.js';
+import { createRequestRouter } from './routes/request.routes.js';
 import { AuthService } from './services/auth.service.js';
 import { UserService } from './services/user.service.js';
 import { createAuthRouter } from './routes/auth.routes.js';
 import { createUserRouter } from './routes/user.routes.js';
+import { createRequestTypeRouter } from './routes/request-type.routes.js';
 
-export function createApp(prisma: PrismaClient): express.Express {
+export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUploader }): express.Express {
   const env = loadEnv();
   const app = express();
 
@@ -28,6 +35,16 @@ export function createApp(prisma: PrismaClient): express.Express {
   const refreshTokenRepo = createRefreshTokenRepository(prisma);
   const loginAttemptRepo = createLoginAttemptRepository(prisma);
   const auditLogRepo = createAuditLogRepository(prisma);
+  const requestTypeRepo = createRequestTypeRepository(prisma);
+  const requestRepo = createRequestRepository(prisma);
+  const photoUploader =
+    deps?.photoUploader ??
+    createCloudinaryUploader({
+      cloudName: env.CLOUDINARY_CLOUD_NAME,
+      apiKey: env.CLOUDINARY_API_KEY,
+      apiSecret: env.CLOUDINARY_API_SECRET,
+    });
+  const requestService = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
 
   const authService = new AuthService({ userRepo, refreshTokenRepo, loginAttemptRepo, auditLogRepo });
   const userService = new UserService({ userRepo, auditLogRepo });
@@ -38,6 +55,8 @@ export function createApp(prisma: PrismaClient): express.Express {
 
   app.use('/auth', createAuthRouter({ authService, userRepo }));
   app.use('/usuarios', createUserRouter({ userService, userRepo }));
+  app.use('/tipos-demanda', createRequestTypeRouter({ requestTypeRepo, userRepo }));
+  app.use('/demandas', createRequestRouter({ requestService, userRepo }));
 
   app.use(errorHandler);
 

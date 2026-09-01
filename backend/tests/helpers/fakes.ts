@@ -3,6 +3,16 @@ import type { RefreshTokenRepository } from '../../src/repositories/refresh-toke
 import type { LoginAttemptRepository } from '../../src/repositories/login-attempt.repository.js';
 import type { AuditLogRepository } from '../../src/repositories/audit-log.repository.js';
 import type { UserRoleValue } from '../../src/utils/jwt.js';
+import type { PhotoUploader, FotoEnviada } from '../../src/services/cloudinary-uploader.service.js';
+import type { RequestTypeRepository, RequestTypeSummary } from '../../src/repositories/request-type.repository.js';
+import type {
+  RequestRepository,
+  RequestDetail,
+  CriarRequestInput,
+  FotoParaSalvar,
+  ListarFiltro,
+  Paginacao,
+} from '../../src/repositories/request.repository.js';
 import { randomUUID } from 'node:crypto';
 
 type StoredUser = PublicUser & { pinHash: string | null };
@@ -118,6 +128,124 @@ export function createFakeAuditLogRepo(): AuditLogRepository & { records: unknow
     records,
     async record(data) {
       records.push(data);
+    },
+  };
+}
+
+export function createFakePhotoUploader(): PhotoUploader & {
+  uploads: { buffer: Buffer; contentType: string; folder: string }[];
+} {
+  const uploads: { buffer: Buffer; contentType: string; folder: string }[] = [];
+  let contador = 0;
+  return {
+    uploads,
+    async upload(input) {
+      uploads.push(input);
+      contador += 1;
+      const resultado: FotoEnviada = {
+        url: `https://res.cloudinary.com/fake/image/authenticated/v1/${input.folder}/fake-${contador}.jpg`,
+        publicId: `${input.folder}/fake-${contador}`,
+      };
+      return resultado;
+    },
+    // A assinatura real do Cloudinary é exercitada no teste unitário do uploader; aqui basta
+    // uma URL reconhecivelmente "assinada" para provar que a API não devolve a url do banco.
+    urlAssinada(publicId) {
+      return `https://res.cloudinary.com/fake/image/authenticated/s--fakesig--/${publicId}`;
+    },
+  };
+}
+
+export function createFakeRequestTypeRepo(
+  seed: (RequestTypeSummary & { ativo: boolean })[] = [],
+): RequestTypeRepository {
+  const tipos = [...seed];
+  return {
+    async listActive() {
+      return tipos
+        .filter((t) => t.ativo)
+        .map(({ id, nome, exigeDescricaoObrigatoria }) => ({ id, nome, exigeDescricaoObrigatoria }));
+    },
+    async findById(id) {
+      return tipos.find((t) => t.id === id) ?? null;
+    },
+  };
+}
+
+export function createFakeRequestRepo(): RequestRepository & {
+  created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[];
+} {
+  const created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[] = [];
+  const store: RequestDetail[] = [];
+  let contador = 0;
+
+  return {
+    created,
+    async create(input, fotos) {
+      created.push({ input, fotos });
+      contador += 1;
+      const detalhe: RequestDetail = {
+        id: `fake-request-${contador}`,
+        codigoInterno: input.codigoInterno,
+        tituloResumido: input.tituloResumido,
+        solicitanteNome: input.solicitanteNome,
+        bairro: input.bairro ?? null,
+        status: 'ENVIADA',
+        assessorResponsavelId: input.assessorResponsavelId,
+        assessorResponsavelNome: 'Assessor Fake',
+        requestTypeId: input.requestTypeId,
+        requestTypeNome: 'Tipo Fake',
+        numeroProtocolo: null,
+        createdAt: new Date(),
+        solicitanteTelefone: input.solicitanteTelefone,
+        solicitanteNascimento: input.solicitanteNascimento ?? null,
+        cep: input.cep ?? null,
+        rua: input.rua ?? null,
+        numero: input.numero ?? null,
+        complemento: input.complemento ?? null,
+        cidade: input.cidade ?? null,
+        estado: input.estado ?? null,
+        pontoReferencia: input.pontoReferencia ?? null,
+        localExato: input.localExato ?? null,
+        descricao: input.descricao,
+        descricaoOutroAssunto: input.descricaoOutroAssunto ?? null,
+        autorizacaoDados: input.autorizacaoDados,
+        updatedAt: new Date(),
+        fotos: fotos.map((f, i) => ({
+          id: `foto-${contador}-${i}`,
+          url: f.url,
+          publicId: f.publicId,
+          larguraPx: f.larguraPx,
+          alturaPx: f.alturaPx,
+        })),
+      };
+      store.push(detalhe);
+      return detalhe;
+    },
+    async findById(id) {
+      return store.find((r) => r.id === id) ?? null;
+    },
+    async list(filtro: ListarFiltro, paginacao: Paginacao) {
+      let filtrados = store;
+      if (filtro.assessorResponsavelId) {
+        filtrados = filtrados.filter((r) => r.assessorResponsavelId === filtro.assessorResponsavelId);
+      }
+      if (filtro.bairro) {
+        filtrados = filtrados.filter((r) => r.bairro === filtro.bairro);
+      }
+      if (filtro.status) {
+        filtrados = filtrados.filter((r) => r.status === filtro.status);
+      }
+      const total = filtrados.length;
+      const inicio = (paginacao.pagina - 1) * paginacao.tamanhoPagina;
+      const pagina = filtrados.slice(inicio, inicio + paginacao.tamanhoPagina);
+      return { items: pagina.map(({ fotos: _fotos, ...resumo }) => resumo), total };
+    },
+    async update(id, input) {
+      const existente = store.find((r) => r.id === id);
+      if (!existente) throw new Error('Request não encontrada (fake)');
+      Object.assign(existente, input);
+      return existente;
     },
   };
 }

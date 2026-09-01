@@ -66,4 +66,21 @@ describe('apiClient.request', () => {
 
     await expect(apiClient.request('/usuarios', { method: 'POST', body: {} })).rejects.toThrow(ApiError);
   });
+
+  it('envia FormData sem JSON.stringify e sem forçar Content-Type', async () => {
+    (fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { ok: true } }),
+    });
+
+    const formData = new FormData();
+    formData.append('campo', 'valor');
+
+    await apiClient.request('/demandas', { method: 'POST', body: formData, auth: true });
+
+    const [, init] = (fetch as any).mock.calls[0];
+    expect(init.body).toBe(formData);
+    expect(init.headers['Content-Type']).toBeUndefined();
+  });
 });
