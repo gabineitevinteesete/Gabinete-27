@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { gerarCodigoInterno } from '../../src/utils/codigo-interno.js';
 
 describe('gerarCodigoInterno', () => {
-  it('segue o formato GD-YYYYMMDD-XXXX', () => {
+  it('segue o formato GD-YYYYMMDD-XXXXXXXX', () => {
     const codigo = gerarCodigoInterno();
-    expect(codigo).toMatch(/^GD-\d{8}-[0-9A-F]{4}$/);
+    expect(codigo).toMatch(/^GD-\d{8}-[0-9A-F]{8}$/);
   });
 
   it('gera códigos diferentes em chamadas sucessivas', () => {
