@@ -1,8 +1,17 @@
-import type { RequestRepository, RequestDetail } from '../repositories/request.repository.js';
+import type {
+  RequestRepository,
+  RequestDetail,
+  RequestSummary,
+  ListarFiltro,
+  Paginacao,
+  EditarRequestInput,
+} from '../repositories/request.repository.js';
 import type { RequestTypeRepository } from '../repositories/request-type.repository.js';
 import type { PhotoUploader } from './cloudinary-uploader.service.js';
+import type { UserRoleValue } from '../utils/jwt.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
+import { podeEditarComoAssessorDeRua } from '../utils/request-status.js';
 
 export interface CriarDemandaInput {
   solicitanteNome: string;
@@ -33,6 +42,21 @@ export type CriarDemandaResultado =
   | { status: 'quantidade_fotos_invalida' }
   | { status: 'foto_invalida'; indice: number }
   | { status: 'autorizacao_obrigatoria' };
+
+export interface UsuarioAutenticado {
+  id: string;
+  role: UserRoleValue;
+}
+
+export type BuscarDemandaResultado =
+  | { status: 'ok'; demanda: RequestDetail }
+  | { status: 'nao_encontrada' }
+  | { status: 'sem_permissao' };
+
+export type EditarDemandaResultado =
+  | { status: 'ok'; demanda: RequestDetail }
+  | { status: 'nao_encontrada' }
+  | { status: 'sem_permissao' };
 
 export class RequestService {
   private requestRepo: RequestRepository;
@@ -113,5 +137,40 @@ export class RequestService {
     );
 
     return { status: 'ok', demanda };
+  }
+
+  async listar(
+    filtro: ListarFiltro,
+    paginacao: Paginacao,
+    usuario: UsuarioAutenticado,
+  ): Promise<{ items: RequestSummary[]; total: number }> {
+    const filtroEfetivo: ListarFiltro =
+      usuario.role === 'ASSESSOR_RUA' ? { ...filtro, assessorResponsavelId: usuario.id } : filtro;
+    return this.requestRepo.list(filtroEfetivo, paginacao);
+  }
+
+  async buscarPorId(id: string, usuario: UsuarioAutenticado): Promise<BuscarDemandaResultado> {
+    const demanda = await this.requestRepo.findById(id);
+    if (!demanda) return { status: 'nao_encontrada' };
+    if (usuario.role === 'ASSESSOR_RUA' && demanda.assessorResponsavelId !== usuario.id) {
+      return { status: 'sem_permissao' };
+    }
+    return { status: 'ok', demanda };
+  }
+
+  async editar(id: string, input: EditarRequestInput, usuario: UsuarioAutenticado): Promise<EditarDemandaResultado> {
+    const demanda = await this.requestRepo.findById(id);
+    if (!demanda) return { status: 'nao_encontrada' };
+
+    if (usuario.role === 'ASSESSOR_RUA') {
+      const dono = demanda.assessorResponsavelId === usuario.id;
+      const aindaEditavel = podeEditarComoAssessorDeRua(demanda.status);
+      if (!dono || !aindaEditavel) {
+        return { status: 'sem_permissao' };
+      }
+    }
+
+    const atualizado = await this.requestRepo.update(id, input);
+    return { status: 'ok', demanda: atualizado };
   }
 }
