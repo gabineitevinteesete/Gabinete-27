@@ -25,6 +25,9 @@ export function createRequestController(requestService: RequestService) {
       if (resultado.status === 'descricao_outro_obrigatoria') {
         throw new HttpError(400, 'Descrição do assunto é obrigatória quando o tipo é "Outros"');
       }
+      if (resultado.status === 'telefone_invalido') {
+        throw new HttpError(400, 'Telefone do solicitante inválido');
+      }
       if (resultado.status === 'quantidade_fotos_invalida') {
         throw new HttpError(400, 'Envie de 2 a 4 fotos');
       }
@@ -63,6 +66,9 @@ export function createRequestController(requestService: RequestService) {
       }
       if (resultado.status === 'descricao_outro_obrigatoria') {
         throw new HttpError(400, 'Descrição do assunto é obrigatória quando o tipo é "Outros"');
+      }
+      if (resultado.status === 'telefone_invalido') {
+        throw new HttpError(400, 'Telefone do solicitante inválido');
       }
       res.json({ success: true, data: resultado.demanda });
     },

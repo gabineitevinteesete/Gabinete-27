@@ -49,6 +49,32 @@ describe('editarDemandaSchema', () => {
   it('aceita objeto vazio (nenhum campo alterado)', () => {
     expect(() => editarDemandaSchema.parse({})).not.toThrow();
   });
+
+  it('trata string vazia nos campos de endereço como "não informado", sem gravar ""', () => {
+    const resultado = editarDemandaSchema.parse({
+      cep: '',
+      rua: '',
+      numero: '',
+      complemento: '',
+      bairro: '',
+      cidade: '',
+      estado: '',
+      pontoReferencia: '',
+    });
+
+    for (const valor of Object.values(resultado)) {
+      expect(valor).toBeUndefined();
+    }
+  });
+
+  it('preserva o valor quando o campo de endereço vem preenchido', () => {
+    const resultado = editarDemandaSchema.parse({ bairro: 'Centro' });
+    expect(resultado.bairro).toBe('Centro');
+  });
+
+  it('continua rejeitando localExato vazio (mínimo de caracteres é intencional)', () => {
+    expect(() => editarDemandaSchema.parse({ localExato: '' })).toThrow();
+  });
 });
 
 describe('listarDemandasQuerySchema', () => {

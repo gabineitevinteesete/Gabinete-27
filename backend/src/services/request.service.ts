@@ -12,6 +12,17 @@ import type { UserRoleValue } from '../utils/jwt.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
 import { podeEditarComoAssessorDeRua } from '../utils/request-status.js';
+import { isValidBrazilianPhone, normalizePhone } from '../utils/phone.js';
+
+/** Foto como é servida à API: `url` é sempre uma URL assinada e temporária, nunca a do banco. */
+export interface FotoPublica {
+  id: string;
+  url: string;
+  larguraPx: number | null;
+  alturaPx: number | null;
+}
+
+export type DemandaDetalhe = Omit<RequestDetail, 'fotos'> & { fotos: FotoPublica[] };
 
 export interface CriarDemandaInput {
   solicitanteNome: string;
@@ -36,9 +47,10 @@ export interface CriarDemandaInput {
 }
 
 export type CriarDemandaResultado =
-  | { status: 'ok'; demanda: RequestDetail }
+  | { status: 'ok'; demanda: DemandaDetalhe }
   | { status: 'tipo_invalido' }
   | { status: 'descricao_outro_obrigatoria' }
+  | { status: 'telefone_invalido' }
   | { status: 'quantidade_fotos_invalida' }
   | { status: 'foto_invalida'; indice: number }
   | { status: 'autorizacao_obrigatoria' };
@@ -49,16 +61,17 @@ export interface UsuarioAutenticado {
 }
 
 export type BuscarDemandaResultado =
-  | { status: 'ok'; demanda: RequestDetail }
+  | { status: 'ok'; demanda: DemandaDetalhe }
   | { status: 'nao_encontrada' }
   | { status: 'sem_permissao' };
 
 export type EditarDemandaResultado =
-  | { status: 'ok'; demanda: RequestDetail }
+  | { status: 'ok'; demanda: DemandaDetalhe }
   | { status: 'nao_encontrada' }
   | { status: 'sem_permissao' }
   | { status: 'tipo_invalido' }
-  | { status: 'descricao_outro_obrigatoria' };
+  | { status: 'descricao_outro_obrigatoria' }
+  | { status: 'telefone_invalido' };
 
 export class RequestService {
   private requestRepo: RequestRepository;
@@ -71,6 +84,22 @@ export class RequestService {
     this.photoUploader = deps.photoUploader;
   }
 
+  /**
+   * Troca a `url` guardada no banco (privada, `type: 'authenticated'`) por uma URL assinada
+   * e temporária, e não expõe o `publicId`. Toda leitura de demanda passa por aqui.
+   */
+  private comFotosAssinadas(demanda: RequestDetail): DemandaDetalhe {
+    return {
+      ...demanda,
+      fotos: demanda.fotos.map((foto) => ({
+        id: foto.id,
+        url: this.photoUploader.urlAssinada(foto.publicId),
+        larguraPx: foto.larguraPx,
+        alturaPx: foto.alturaPx,
+      })),
+    };
+  }
+
   async criar(input: CriarDemandaInput): Promise<CriarDemandaResultado> {
     if (input.fotos.length < 2 || input.fotos.length > 4) {
       return { status: 'quantidade_fotos_invalida' };
@@ -78,6 +107,12 @@ export class RequestService {
     if (!input.autorizacaoDados) {
       return { status: 'autorizacao_obrigatoria' };
     }
+    // Mesmo tratamento de `User.telefone` (Fase 1): valida e normaliza para E.164 antes de
+    // persistir, senão o filtro por telefone exato em `list()` nunca casa.
+    if (!isValidBrazilianPhone(input.solicitanteTelefone)) {
+      return { status: 'telefone_invalido' };
+    }
+    const solicitanteTelefone = normalizePhone(input.solicitanteTelefone);
 
     const tipo = await this.requestTypeRepo.findById(input.requestTypeId);
     if (!tipo || !tipo.ativo) {
@@ -117,7 +152,7 @@ export class RequestService {
       {
         codigoInterno: gerarCodigoInterno(),
         solicitanteNome: input.solicitanteNome,
-        solicitanteTelefone: input.solicitanteTelefone,
+        solicitanteTelefone,
         solicitanteNascimento: input.solicitanteNascimento,
         cep: input.cep,
         rua: input.rua,
@@ -138,7 +173,7 @@ export class RequestService {
       fotosEnviadas,
     );
 
-    return { status: 'ok', demanda };
+    return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
   }
 
   async listar(
@@ -157,7 +192,7 @@ export class RequestService {
     if (usuario.role === 'ASSESSOR_RUA' && demanda.assessorResponsavelId !== usuario.id) {
       return { status: 'sem_permissao' };
     }
-    return { status: 'ok', demanda };
+    return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
   }
 
   async editar(id: string, input: EditarRequestInput, usuario: UsuarioAutenticado): Promise<EditarDemandaResultado> {
@@ -172,19 +207,33 @@ export class RequestService {
       }
     }
 
-    if (input.requestTypeId !== undefined) {
-      const tipo = await this.requestTypeRepo.findById(input.requestTypeId);
-      if (!tipo || !tipo.ativo) {
+    const dados: EditarRequestInput = { ...input };
+
+    if (input.solicitanteTelefone !== undefined) {
+      if (!isValidBrazilianPhone(input.solicitanteTelefone)) {
+        return { status: 'telefone_invalido' };
+      }
+      dados.solicitanteTelefone = normalizePhone(input.solicitanteTelefone);
+    }
+
+    // A regra "Outros exige descrição" precisa ser reavaliada tanto ao trocar o tipo quanto
+    // ao mexer só na descrição — senão um PATCH com `{descricaoOutroAssunto: ''}` numa
+    // demanda que já é "Outros" apagaria a descrição sem passar por validação nenhuma.
+    if (input.requestTypeId !== undefined || input.descricaoOutroAssunto !== undefined) {
+      const tipo = await this.requestTypeRepo.findById(input.requestTypeId ?? demanda.requestTypeId);
+      // Tipo inativo/inexistente só é erro quando é o tipo *novo*: não bloqueamos a edição de
+      // uma demanda antiga cujo tipo foi desativado depois.
+      if (input.requestTypeId !== undefined && (!tipo || !tipo.ativo)) {
         return { status: 'tipo_invalido' };
       }
       const descricaoEfetiva =
         input.descricaoOutroAssunto !== undefined ? input.descricaoOutroAssunto : demanda.descricaoOutroAssunto;
-      if (tipo.exigeDescricaoObrigatoria && !descricaoEfetiva?.trim()) {
+      if (tipo?.exigeDescricaoObrigatoria && !descricaoEfetiva?.trim()) {
         return { status: 'descricao_outro_obrigatoria' };
       }
     }
 
-    const atualizado = await this.requestRepo.update(id, input);
-    return { status: 'ok', demanda: atualizado };
+    const atualizado = await this.requestRepo.update(id, dados);
+    return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
   }
 }

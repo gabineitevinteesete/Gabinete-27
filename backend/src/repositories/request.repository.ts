@@ -46,6 +46,19 @@ export interface RequestSummary {
   createdAt: Date;
 }
 
+/**
+ * Foto como está guardada no banco. `url` é a URL devolvida pelo Cloudinary no upload e fica
+ * só como referência/auditoria: o que é servido à API é uma URL assinada gerada a partir do
+ * `publicId` (as fotos são `type: 'authenticated'`).
+ */
+export interface FotoArmazenada {
+  id: string;
+  url: string;
+  publicId: string;
+  larguraPx: number | null;
+  alturaPx: number | null;
+}
+
 export interface RequestDetail extends RequestSummary {
   solicitanteTelefone: string;
   solicitanteNascimento: Date | null;
@@ -61,7 +74,7 @@ export interface RequestDetail extends RequestSummary {
   descricaoOutroAssunto: string | null;
   autorizacaoDados: boolean;
   updatedAt: Date;
-  fotos: { id: string; url: string; larguraPx: number | null; alturaPx: number | null }[];
+  fotos: FotoArmazenada[];
 }
 
 export interface ListarFiltro {
@@ -94,7 +107,7 @@ export interface RequestRepository {
 }
 
 const INCLUDE_DETALHE = {
-  fotos: { select: { id: true, url: true, larguraPx: true, alturaPx: true } },
+  fotos: { select: { id: true, url: true, publicId: true, larguraPx: true, alturaPx: true } },
   requestType: { select: { nome: true } },
   assessorResponsavel: { select: { nome: true } },
 } satisfies Prisma.RequestInclude;
