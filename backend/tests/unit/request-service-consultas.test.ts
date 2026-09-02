@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RequestService } from '../../src/services/request.service.js';
 import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo } from '../helpers/fakes.js';
+import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
 
 function buildService() {
   const requestTypeRepo = createFakeRequestTypeRepo([
@@ -300,6 +301,20 @@ describe('RequestService.mudarStatus', () => {
     const resultado = await service.mudarStatus('id-inexistente', 'RECEBIDA', undefined, 'gabinete-1');
     expect(resultado.status).toBe('nao_encontrada');
   });
+
+  it('traduz a corrida perdida na transação (TransicaoConcorrenteError) para transicao_invalida', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+    // Simula outra requisição tendo mudado o status entre o findById do service e a gravação:
+    // a checagem que o repositório real faz dentro da transação é a que rejeita.
+    requestRepo.updateStatus = async () => {
+      throw new TransicaoConcorrenteError();
+    };
+
+    const resultado = await service.mudarStatus(demanda.id, 'RECEBIDA', undefined, 'gabinete-1');
+
+    expect(resultado.status).toBe('transicao_invalida');
+  });
 });
 
 describe('RequestService.listarHistoricoStatus', () => {
@@ -360,5 +375,31 @@ describe('RequestService.reatribuir', () => {
     const resultado = await service.reatribuir(demanda.id, inativo.id, 'chefe-1');
 
     expect(resultado.status).toBe('assessor_invalido');
+  });
+
+  it('rejeita reatribuir para um chefe', async () => {
+    const { service, requestRepo, userRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-original');
+    await userRepo.create({ nome: 'Outro Chefe', telefone: '+5534988880004', role: 'CHEFE' });
+    const chefe = userRepo.users.find((u) => u.nome === 'Outro Chefe')!;
+
+    const resultado = await service.reatribuir(demanda.id, chefe.id, 'chefe-1');
+
+    expect(resultado.status).toBe('assessor_invalido');
+  });
+
+  it('reatribuir para o assessor que já é o responsável é no-op e não grava histórico', async () => {
+    const { service, requestRepo, userRepo } = buildService();
+    await userRepo.create({ nome: 'Assessor Atual', telefone: '+5534988880005', role: 'ASSESSOR_RUA' });
+    const atual = userRepo.users.find((u) => u.nome === 'Assessor Atual')!;
+    const demanda = await criarDemandaFake(requestRepo, atual.id);
+
+    const resultado = await service.reatribuir(demanda.id, atual.id, 'chefe-1');
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status === 'ok') {
+      expect(resultado.demanda.assessorResponsavelId).toBe(atual.id);
+    }
+    expect(requestRepo.historicoReatribuicao).toHaveLength(0);
   });
 });
