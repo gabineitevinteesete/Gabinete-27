@@ -5,6 +5,7 @@ import type { RequestService } from '../services/request.service.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 import { createRequestController } from '../controllers/request.controller.js';
 import { authenticate } from '../middlewares/authenticate.js';
+import { requireRole } from '../middlewares/require-role.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -38,6 +39,9 @@ export function createRequestRouter(deps: { requestService: RequestService; user
   router.get('/', auth, asyncHandler(controller.listar));
   router.get('/:id', auth, asyncHandler(controller.buscarPorId));
   router.patch('/:id', auth, asyncHandler(controller.editar));
+  router.patch('/:id/status', auth, requireRole('ASSESSOR_GABINETE', 'CHEFE'), asyncHandler(controller.mudarStatus));
+  router.get('/:id/historico-status', auth, asyncHandler(controller.historicoStatus));
+  router.patch('/:id/reatribuir', auth, requireRole('CHEFE'), asyncHandler(controller.reatribuir));
 
   return router;
 }
