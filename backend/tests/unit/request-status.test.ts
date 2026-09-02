@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { STATUS_ANTES_DE_PROTOCOLAR, podeEditarComoAssessorDeRua, transicaoValida, exigeMotivo, TRANSICOES_VALIDAS } from '../../src/utils/request-status.js';
+import {
+  STATUS_ANTES_DE_PROTOCOLAR,
+  podeEditarComoAssessorDeRua,
+  transicaoValida,
+  exigeMotivo,
+  TRANSICOES_VALIDAS,
+  type RequestStatusValue,
+} from '../../src/utils/request-status.js';
 
 describe('podeEditarComoAssessorDeRua', () => {
   it('permite editar quando o status ainda está antes de protocolada', () => {
@@ -19,9 +26,9 @@ describe('podeEditarComoAssessorDeRua', () => {
 
 describe('transicaoValida', () => {
   it('permite cada transição da tabela de transições válidas', () => {
-    for (const [de, destinos] of Object.entries(TRANSICOES_VALIDAS)) {
+    for (const [de, destinos] of Object.entries(TRANSICOES_VALIDAS) as [RequestStatusValue, RequestStatusValue[]][]) {
       for (const para of destinos) {
-        expect(transicaoValida(de as never, para)).toBe(true);
+        expect(transicaoValida(de, para)).toBe(true);
       }
     }
   });

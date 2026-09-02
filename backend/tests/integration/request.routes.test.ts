@@ -463,4 +463,19 @@ describe('PATCH /demandas/:id/reatribuir', () => {
 
     expect(res.status).toBe(400);
   }, 30000); // Neon real via rede.
+
+  it('rejeita reatribuir para um chefe com 400', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998019');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998020');
+    const { assessor: outroChefe } = await loginComoAssessor('CHEFE', '+5534999998021');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/reatribuir`)
+      .set('Authorization', `Bearer ${tokenChefe}`)
+      .send({ novoAssessorId: outroChefe.id });
+
+    expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
 });

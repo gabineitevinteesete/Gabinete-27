@@ -13,6 +13,7 @@ import type {
   ListarFiltro,
   Paginacao,
 } from '../../src/repositories/request.repository.js';
+import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../../src/utils/request-status.js';
 import { randomUUID } from 'node:crypto';
 
 type StoredUser = PublicUser & { pinHash: string | null };
@@ -172,17 +173,36 @@ export function createFakeRequestTypeRepo(
   };
 }
 
+interface FakeHistoricoStatus {
+  requestId: string;
+  statusAnterior: RequestStatusValue | null;
+  statusNovo: RequestStatusValue;
+  usuarioId: string;
+  observacao: string | null;
+  createdAt: Date;
+}
+
+interface FakeHistoricoReatribuicao {
+  requestId: string;
+  assessorAnteriorId: string;
+  assessorNovoId: string;
+  reatribuidoPorId: string;
+  createdAt: Date;
+}
+
 export function createFakeRequestRepo(): RequestRepository & {
   created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[];
+  historicoReatribuicao: FakeHistoricoReatribuicao[];
 } {
   const created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[] = [];
   const store: RequestDetail[] = [];
   let contador = 0;
-  const historicoStatus: { requestId: string; statusAnterior: string | null; statusNovo: string; usuarioId: string; observacao: string | null; createdAt: Date }[] = [];
-  const historicoReatribuicao: { requestId: string; assessorAnteriorId: string; assessorNovoId: string; reatribuidoPorId: string; createdAt: Date }[] = [];
+  const historicoStatus: FakeHistoricoStatus[] = [];
+  const historicoReatribuicao: FakeHistoricoReatribuicao[] = [];
 
   return {
     created,
+    historicoReatribuicao,
     async create(input, fotos) {
       created.push({ input, fotos });
       contador += 1;
@@ -252,6 +272,8 @@ export function createFakeRequestRepo(): RequestRepository & {
     async updateStatus(id, novoStatus, usuarioId, motivo) {
       const existente = store.find((r) => r.id === id);
       if (!existente) throw new Error('Request não encontrada (fake)');
+      // Espelha a revalidação que o repositório real faz dentro da transação.
+      if (!transicaoValida(existente.status, novoStatus)) throw new TransicaoConcorrenteError();
       historicoStatus.push({
         requestId: id,
         statusAnterior: existente.status,
@@ -270,8 +292,8 @@ export function createFakeRequestRepo(): RequestRepository & {
         .reverse()
         .map((h, i) => ({
           id: `historico-${id}-${i}`,
-          statusAnterior: h.statusAnterior as never,
-          statusNovo: h.statusNovo as never,
+          statusAnterior: h.statusAnterior,
+          statusNovo: h.statusNovo,
           usuarioId: h.usuarioId,
           usuarioNome: 'Usuário Fake',
           observacao: h.observacao,
