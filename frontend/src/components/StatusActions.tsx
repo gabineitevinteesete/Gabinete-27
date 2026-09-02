@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { apiClient, ApiError } from '@/services/api-client';
 import { TRANSICOES_VALIDAS, ACAO_LABEL, exigeMotivo } from '@/lib/request-status';
-import type { RequestStatusValue } from '@/types/request';
+import type { DemandaDetalhe, RequestStatusValue } from '@/types/request';
 
 interface StatusActionsProps {
   demandaId: string;
   statusAtual: RequestStatusValue;
-  onStatusAlterado: (demanda: { id: string; status: RequestStatusValue }) => void;
+  onStatusAlterado: (demanda: DemandaDetalhe) => void;
 }
 
 export function StatusActions({ demandaId, statusAtual, onStatusAlterado }: StatusActionsProps) {
@@ -23,10 +23,11 @@ export function StatusActions({ demandaId, statusAtual, onStatusAlterado }: Stat
     setErro(null);
     setEnviando(true);
     try {
-      const demanda = await apiClient.request<{ id: string; status: RequestStatusValue }>(
-        `/demandas/${demandaId}/status`,
-        { method: 'PATCH', auth: true, body: { novoStatus, motivo: motivoInformado } },
-      );
+      const demanda = await apiClient.request<DemandaDetalhe>(`/demandas/${demandaId}/status`, {
+        method: 'PATCH',
+        auth: true,
+        body: { novoStatus, motivo: motivoInformado },
+      });
       setTransicaoPendente(null);
       setMotivo('');
       onStatusAlterado(demanda);
