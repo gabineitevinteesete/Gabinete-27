@@ -14,6 +14,10 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await prisma.requestPhoto.deleteMany();
+  // requestStatusHistory/requestReassignmentHistory referenciam request com FK RESTRICT
+  // (Task 3 adicionou linhas nessas tabelas) — precisam ser limpas antes de request.deleteMany().
+  await prisma.requestStatusHistory.deleteMany();
+  await prisma.requestReassignmentHistory.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
   // refreshToken precisa ser limpo antes de user por causa da FK RESTRICT — outros
@@ -130,5 +134,92 @@ describe('RequestRepository.update', () => {
     expect(atualizado.tituloResumido).toBe('Buraco corrigido');
     expect(atualizado.bairro).toBe('Novo Bairro');
     expect(atualizado.solicitanteNome).toBe('Maria Solicitante');
+  });
+});
+
+describe('RequestRepository.updateStatus', () => {
+  it('atualiza o status e grava uma linha no histórico', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-status-1' }), [fotoBase]);
+
+    const atualizada = await requestRepo.updateStatus(criado.id, 'RECEBIDA', assessorId);
+
+    expect(atualizada.status).toBe('RECEBIDA');
+    const historico = await prisma.requestStatusHistory.findMany({ where: { requestId: criado.id } });
+    expect(historico).toHaveLength(1);
+    expect(historico[0]?.statusAnterior).toBe('ENVIADA');
+    expect(historico[0]?.statusNovo).toBe('RECEBIDA');
+    expect(historico[0]?.usuarioId).toBe(assessorId);
+    expect(historico[0]?.observacao).toBeNull();
+  });
+
+  // 1 create + 3 updateStatus em sequência contra o Neon real; mesmo raciocínio dos testes
+  // de paginação acima (timeout ampliado só aqui, não globalmente).
+  it('grava o motivo quando informado', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-status-2' }), [fotoBase]);
+    await requestRepo.updateStatus(criado.id, 'RECEBIDA', assessorId);
+    await requestRepo.updateStatus(criado.id, 'EM_CONFERENCIA', assessorId);
+
+    await requestRepo.updateStatus(criado.id, 'PENDENTE_INFORMACAO', assessorId, 'Falta o telefone do solicitante');
+
+    const historico = await prisma.requestStatusHistory.findMany({
+      where: { requestId: criado.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(historico).toHaveLength(3);
+    expect(historico[2]?.observacao).toBe('Falta o telefone do solicitante');
+  }, 20000);
+
+  it('grava arquivadoEm ao entrar em ARQUIVADA', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-status-3' }), [fotoBase]);
+    await requestRepo.updateStatus(criado.id, 'RECUSADA', assessorId, 'Duplicado');
+
+    await requestRepo.updateStatus(criado.id, 'ARQUIVADA', assessorId);
+
+    const linha = await prisma.request.findUniqueOrThrow({ where: { id: criado.id } });
+    expect(linha.arquivadoEm).not.toBeNull();
+  });
+});
+
+describe('RequestRepository.listarHistoricoStatus', () => {
+  it('lista o histórico mais recente primeiro, com o nome de quem alterou', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-hist-1' }), [fotoBase]);
+    await requestRepo.updateStatus(criado.id, 'RECEBIDA', assessorId);
+    await requestRepo.updateStatus(criado.id, 'EM_CONFERENCIA', assessorId);
+
+    const historico = await requestRepo.listarHistoricoStatus(criado.id);
+
+    expect(historico).toHaveLength(2);
+    expect(historico[0]?.statusNovo).toBe('EM_CONFERENCIA');
+    expect(historico[1]?.statusNovo).toBe('RECEBIDA');
+    expect(historico[0]?.usuarioNome).toBe('Assessor Teste');
+  }, 20000);
+
+  it('retorna lista vazia para uma demanda sem mudança de status', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-hist-2' }), [fotoBase]);
+
+    const historico = await requestRepo.listarHistoricoStatus(criado.id);
+
+    expect(historico).toEqual([]);
+  });
+});
+
+describe('RequestRepository.reatribuir', () => {
+  it('atualiza o assessor responsável e grava uma linha no histórico de reatribuição', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-reatrib-1' }), [fotoBase]);
+    const novoAssessor = await prisma.user.create({
+      data: { nome: 'Novo Assessor', telefone: '+5534999996300', role: 'ASSESSOR_GABINETE' },
+    });
+    const chefe = await prisma.user.create({
+      data: { nome: 'Chefe Teste', telefone: '+5534999996400', role: 'CHEFE' },
+    });
+
+    const atualizada = await requestRepo.reatribuir(criado.id, novoAssessor.id, chefe.id);
+
+    expect(atualizada.assessorResponsavelId).toBe(novoAssessor.id);
+    const historico = await prisma.requestReassignmentHistory.findMany({ where: { requestId: criado.id } });
+    expect(historico).toHaveLength(1);
+    expect(historico[0]?.assessorAnteriorId).toBe(assessorId);
+    expect(historico[0]?.assessorNovoId).toBe(novoAssessor.id);
+    expect(historico[0]?.reatribuidoPorId).toBe(chefe.id);
   });
 });
