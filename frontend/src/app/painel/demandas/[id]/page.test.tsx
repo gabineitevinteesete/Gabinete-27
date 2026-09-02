@@ -16,6 +16,16 @@ vi.mock('@/services/api-client', async () => {
 });
 import { apiClient } from '@/services/api-client';
 
+vi.mock('@/components/StatusActions', () => ({
+  StatusActions: ({ statusAtual }: { statusAtual: string }) => <div>Ações de status ({statusAtual})</div>,
+}));
+vi.mock('@/components/HistoricoStatus', () => ({
+  HistoricoStatus: () => <div>Histórico de status</div>,
+}));
+vi.mock('@/components/ReatribuirDemanda', () => ({
+  ReatribuirDemanda: () => <div>Reatribuir demanda</div>,
+}));
+
 function demandaFake(overrides: Record<string, unknown> = {}) {
   return {
     id: 'demanda-1', codigoInterno: 'GD-1', tituloResumido: 'Buraco na rua', solicitanteNome: 'Maria',
@@ -72,5 +82,45 @@ describe('DemandaDetalhePage', () => {
     render(<DemandaDetalhePage />);
 
     expect(await screen.findByRole('link', { name: /editar/i })).toBeInTheDocument();
+  });
+
+  it('mostra as ações de status e o histórico para gabinete', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+
+    expect(await screen.findByText(/Ações de status/)).toBeInTheDocument();
+    expect(screen.getByText('Histórico de status')).toBeInTheDocument();
+  });
+
+  it('não mostra ações de status para assessor de rua', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-dono', role: 'ASSESSOR_RUA' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+    await screen.findByText('Buraco na rua');
+
+    expect(screen.queryByText(/Ações de status/)).not.toBeInTheDocument();
+    expect(screen.getByText('Histórico de status')).toBeInTheDocument();
+  });
+
+  it('mostra reatribuir só para o chefe', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'chefe-1', role: 'CHEFE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+
+    expect(await screen.findByText('Reatribuir demanda')).toBeInTheDocument();
+  });
+
+  it('não mostra reatribuir para gabinete', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+    await screen.findByText('Buraco na rua');
+
+    expect(screen.queryByText('Reatribuir demanda')).not.toBeInTheDocument();
   });
 });

@@ -7,6 +7,9 @@ import { apiClient } from '@/services/api-client';
 import { useAuth } from '@/hooks/use-auth';
 import { STATUS_ANTES_DE_PROTOCOLAR } from '@/lib/request-status';
 import type { DemandaDetalhe } from '@/types/request';
+import { StatusActions } from '@/components/StatusActions';
+import { HistoricoStatus } from '@/components/HistoricoStatus';
+import { ReatribuirDemanda } from '@/components/ReatribuirDemanda';
 
 export default function DemandaDetalhePage() {
   const params = useParams<{ id: string }>();
@@ -38,6 +41,9 @@ export default function DemandaDetalhePage() {
     (user?.role === 'ASSESSOR_RUA' &&
       demanda.assessorResponsavelId === user.id &&
       (STATUS_ANTES_DE_PROTOCOLAR as string[]).includes(demanda.status));
+
+  const podeMudarStatus = user?.role === 'ASSESSOR_GABINETE' || user?.role === 'CHEFE';
+  const ehChefe = user?.role === 'CHEFE';
 
   return (
     <div className="flex flex-col gap-4 rounded-card bg-white p-6 shadow-sm">
@@ -82,6 +88,29 @@ export default function DemandaDetalhePage() {
       <div>
         <p className="text-xs font-medium text-gray-600">Assessor responsável</p>
         <p className="text-sm text-gray-900">{demanda.assessorResponsavelNome}</p>
+      </div>
+
+      {podeMudarStatus && (
+        <StatusActions
+          demandaId={demanda.id}
+          statusAtual={demanda.status}
+          onStatusAlterado={(atualizado) => setDemanda({ ...demanda, status: atualizado.status })}
+        />
+      )}
+
+      {ehChefe && (
+        <ReatribuirDemanda
+          demandaId={demanda.id}
+          assessorAtualId={demanda.assessorResponsavelId}
+          onReatribuido={(atualizado) =>
+            setDemanda({ ...demanda, assessorResponsavelId: atualizado.assessorResponsavelId })
+          }
+        />
+      )}
+
+      <div>
+        <p className="text-xs font-medium text-gray-600">Histórico</p>
+        <HistoricoStatus demandaId={demanda.id} />
       </div>
     </div>
   );
