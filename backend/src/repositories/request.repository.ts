@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import type { RequestStatusValue } from '../utils/request-status.js';
+import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../utils/request-status.js';
 
 export interface CriarRequestInput {
   codigoInterno: string;
@@ -293,6 +293,12 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
     async updateStatus(id, novoStatus, usuarioId, motivo) {
       return prisma.$transaction(async (tx) => {
         const atual = await tx.request.findUniqueOrThrow({ where: { id } });
+        // Revalida contra a leitura fresca dentro da transação: o service validou fora dela e
+        // uma requisição concorrente pode ter mudado o status nesse meio-tempo (o histórico
+        // ficaria com duas linhas alegando a mesma origem).
+        if (!transicaoValida(atual.status as RequestStatusValue, novoStatus)) {
+          throw new TransicaoConcorrenteError();
+        }
         await tx.requestStatusHistory.create({
           data: {
             requestId: id,

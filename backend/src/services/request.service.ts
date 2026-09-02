@@ -13,7 +13,13 @@ import type { UserRepository } from '../repositories/user.repository.js';
 import type { HistoricoStatusItem } from '../repositories/request.repository.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
-import { transicaoValida, exigeMotivo, podeEditarComoAssessorDeRua, type RequestStatusValue } from '../utils/request-status.js';
+import {
+  transicaoValida,
+  exigeMotivo,
+  podeEditarComoAssessorDeRua,
+  TransicaoConcorrenteError,
+  type RequestStatusValue,
+} from '../utils/request-status.js';
 import { isValidBrazilianPhone, normalizePhone } from '../utils/phone.js';
 
 /** Foto como é servida à API: `url` é sempre assinada na hora, nunca a `url` pública guardada no banco. */
@@ -273,8 +279,15 @@ export class RequestService {
     if (!transicaoValida(demanda.status, novoStatus)) return { status: 'transicao_invalida' };
     if (exigeMotivo(novoStatus) && !motivo?.trim()) return { status: 'motivo_obrigatorio' };
 
-    const atualizado = await this.requestRepo.updateStatus(id, novoStatus, usuarioId, motivo);
-    return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
+    try {
+      const atualizado = await this.requestRepo.updateStatus(id, novoStatus, usuarioId, motivo);
+      return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
+    } catch (erro) {
+      // Perdeu a corrida para outra requisição concorrente: para quem chamou é o mesmo caso
+      // de uma transição inválida (a origem que ele viu não é mais o status atual).
+      if (erro instanceof TransicaoConcorrenteError) return { status: 'transicao_invalida' };
+      throw erro;
+    }
   }
 
   async listarHistoricoStatus(id: string, usuario: UsuarioAutenticado): Promise<HistoricoStatusResultado> {
@@ -291,8 +304,17 @@ export class RequestService {
     const demanda = await this.requestRepo.findById(id);
     if (!demanda) return { status: 'nao_encontrada' };
 
+    // Só assessor ativo é destino válido — o chefe não entra na fila de responsáveis.
     const novoAssessor = await this.userRepo.findById(novoAssessorId);
-    if (!novoAssessor || !novoAssessor.ativo) return { status: 'assessor_invalido' };
+    if (!novoAssessor || !novoAssessor.ativo || novoAssessor.role === 'CHEFE') {
+      return { status: 'assessor_invalido' };
+    }
+
+    // Reatribuir para quem já é o responsável é no-op: gravar aqui só sujaria a auditoria
+    // com uma linha "de X para X".
+    if (demanda.assessorResponsavelId === novoAssessorId) {
+      return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
+    }
 
     const atualizado = await this.requestRepo.reatribuir(id, novoAssessorId, reatribuidoPorId);
     return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
