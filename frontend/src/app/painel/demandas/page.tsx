@@ -21,6 +21,7 @@ export default function DemandasPage() {
   const [pagina, setPagina] = useState(1);
   const [bairro, setBairro] = useState('');
   const [bairroBuscado, setBairroBuscado] = useState('');
+  const [status, setStatus] = useState('');
   const [carregando, setCarregando] = useState(true);
   const tamanhoPagina = 20;
 
@@ -34,6 +35,7 @@ export default function DemandasPage() {
     setCarregando(true);
     const params = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: String(tamanhoPagina) });
     if (bairroBuscado) params.set('bairro', bairroBuscado);
+    if (status) params.set('status', status);
 
     apiClient
       .request<ListaDemandasResposta>(`/demandas?${params.toString()}`, { auth: true })
@@ -46,7 +48,7 @@ export default function DemandasPage() {
         setTotal(0);
       })
       .finally(() => setCarregando(false));
-  }, [pagina, bairroBuscado]);
+  }, [pagina, bairroBuscado, status]);
 
   const totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
 
@@ -75,6 +77,28 @@ export default function DemandasPage() {
           }}
           className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
         />
+      </div>
+
+      <div className="max-w-xs">
+        <label htmlFor="filtro-status" className="text-xs font-medium text-gray-600">
+          Status
+        </label>
+        <select
+          id="filtro-status"
+          value={status}
+          onChange={(e) => {
+            setPagina(1);
+            setStatus(e.target.value);
+          }}
+          className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+        >
+          <option value="">Todos</option>
+          {Object.entries(STATUS_LABEL).map(([valor, rotulo]) => (
+            <option key={valor} value={valor}>
+              {rotulo}
+            </option>
+          ))}
+        </select>
       </div>
 
       {carregando && <p className="text-sm text-gray-500">Carregando…</p>}

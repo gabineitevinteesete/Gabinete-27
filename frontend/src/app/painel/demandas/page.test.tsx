@@ -75,4 +75,17 @@ describe('DemandasPage', () => {
 
     expect(await screen.findByText(/nenhuma demanda encontrada/i)).toBeInTheDocument();
   });
+
+  it('refaz a busca quando o filtro de status muda', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
+    const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
+    expect(url).toContain('status=RECEBIDA');
+  });
 });
