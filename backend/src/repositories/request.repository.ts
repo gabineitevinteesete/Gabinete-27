@@ -95,6 +95,16 @@ export interface Paginacao {
   tamanhoPagina: number;
 }
 
+export interface HistoricoStatusItem {
+  id: string;
+  statusAnterior: RequestStatusValue | null;
+  statusNovo: RequestStatusValue;
+  usuarioId: string;
+  usuarioNome: string;
+  observacao: string | null;
+  createdAt: Date;
+}
+
 export type EditarRequestInput = Partial<
   Omit<CriarRequestInput, 'codigoInterno' | 'assessorResponsavelId' | 'autorizacaoDados'>
 >;
@@ -104,6 +114,9 @@ export interface RequestRepository {
   findById(id: string): Promise<RequestDetail | null>;
   list(filtro: ListarFiltro, paginacao: Paginacao): Promise<{ items: RequestSummary[]; total: number }>;
   update(id: string, input: EditarRequestInput): Promise<RequestDetail>;
+  updateStatus(id: string, novoStatus: RequestStatusValue, usuarioId: string, motivo?: string): Promise<RequestDetail>;
+  listarHistoricoStatus(id: string): Promise<HistoricoStatusItem[]>;
+  reatribuir(id: string, novoAssessorId: string, reatribuidoPorId: string): Promise<RequestDetail>;
 }
 
 const INCLUDE_DETALHE = {
@@ -275,6 +288,67 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
         include: INCLUDE_DETALHE,
       });
       return toDetail(atualizado);
+    },
+
+    async updateStatus(id, novoStatus, usuarioId, motivo) {
+      return prisma.$transaction(async (tx) => {
+        const atual = await tx.request.findUniqueOrThrow({ where: { id } });
+        await tx.requestStatusHistory.create({
+          data: {
+            requestId: id,
+            statusAnterior: atual.status,
+            statusNovo: novoStatus,
+            usuarioId,
+            observacao: motivo,
+          },
+        });
+        const atualizado = await tx.request.update({
+          where: { id },
+          data: {
+            status: novoStatus,
+            ...(novoStatus === 'ARQUIVADA' ? { arquivadoEm: new Date() } : {}),
+          },
+          include: INCLUDE_DETALHE,
+        });
+        return toDetail(atualizado);
+      });
+    },
+
+    async listarHistoricoStatus(id) {
+      const rows = await prisma.requestStatusHistory.findMany({
+        where: { requestId: id },
+        include: { usuario: { select: { nome: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      return rows.map((row) => ({
+        id: row.id,
+        statusAnterior: row.statusAnterior as RequestStatusValue | null,
+        statusNovo: row.statusNovo as RequestStatusValue,
+        usuarioId: row.usuarioId,
+        usuarioNome: row.usuario.nome,
+        observacao: row.observacao,
+        createdAt: row.createdAt,
+      }));
+    },
+
+    async reatribuir(id, novoAssessorId, reatribuidoPorId) {
+      return prisma.$transaction(async (tx) => {
+        const atual = await tx.request.findUniqueOrThrow({ where: { id } });
+        await tx.requestReassignmentHistory.create({
+          data: {
+            requestId: id,
+            assessorAnteriorId: atual.assessorResponsavelId,
+            assessorNovoId: novoAssessorId,
+            reatribuidoPorId,
+          },
+        });
+        const atualizado = await tx.request.update({
+          where: { id },
+          data: { assessorResponsavelId: novoAssessorId },
+          include: INCLUDE_DETALHE,
+        });
+        return toDetail(atualizado);
+      });
     },
   };
 }

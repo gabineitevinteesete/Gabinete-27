@@ -178,6 +178,8 @@ export function createFakeRequestRepo(): RequestRepository & {
   const created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[] = [];
   const store: RequestDetail[] = [];
   let contador = 0;
+  const historicoStatus: { requestId: string; statusAnterior: string | null; statusNovo: string; usuarioId: string; observacao: string | null; createdAt: Date }[] = [];
+  const historicoReatribuicao: { requestId: string; assessorAnteriorId: string; assessorNovoId: string; reatribuidoPorId: string; createdAt: Date }[] = [];
 
   return {
     created,
@@ -245,6 +247,48 @@ export function createFakeRequestRepo(): RequestRepository & {
       const existente = store.find((r) => r.id === id);
       if (!existente) throw new Error('Request não encontrada (fake)');
       Object.assign(existente, input);
+      return existente;
+    },
+    async updateStatus(id, novoStatus, usuarioId, motivo) {
+      const existente = store.find((r) => r.id === id);
+      if (!existente) throw new Error('Request não encontrada (fake)');
+      historicoStatus.push({
+        requestId: id,
+        statusAnterior: existente.status,
+        statusNovo: novoStatus,
+        usuarioId,
+        observacao: motivo ?? null,
+        createdAt: new Date(),
+      });
+      existente.status = novoStatus;
+      return existente;
+    },
+    async listarHistoricoStatus(id) {
+      return historicoStatus
+        .filter((h) => h.requestId === id)
+        .slice()
+        .reverse()
+        .map((h, i) => ({
+          id: `historico-${id}-${i}`,
+          statusAnterior: h.statusAnterior as never,
+          statusNovo: h.statusNovo as never,
+          usuarioId: h.usuarioId,
+          usuarioNome: 'Usuário Fake',
+          observacao: h.observacao,
+          createdAt: h.createdAt,
+        }));
+    },
+    async reatribuir(id, novoAssessorId, reatribuidoPorId) {
+      const existente = store.find((r) => r.id === id);
+      if (!existente) throw new Error('Request não encontrada (fake)');
+      historicoReatribuicao.push({
+        requestId: id,
+        assessorAnteriorId: existente.assessorResponsavelId,
+        assessorNovoId: novoAssessorId,
+        reatribuidoPorId,
+        createdAt: new Date(),
+      });
+      existente.assessorResponsavelId = novoAssessorId;
       return existente;
     },
   };
