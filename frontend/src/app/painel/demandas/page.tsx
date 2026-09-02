@@ -4,19 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/services/api-client';
 import type { DemandaResumo } from '@/types/request';
-
-const STATUS_LABEL: Record<string, string> = {
-  RASCUNHO: 'Rascunho',
-  ENVIADA: 'Enviada',
-  RECEBIDA: 'Recebida',
-  EM_CONFERENCIA: 'Em conferência',
-  PENDENTE_INFORMACAO: 'Pendente de informação',
-  PROTOCOLADA: 'Protocolada',
-  EM_ANDAMENTO: 'Em andamento',
-  CONCLUIDA: 'Concluída',
-  ARQUIVADA: 'Arquivada',
-  RECUSADA: 'Recusada',
-};
+import { STATUS_LABEL } from '@/lib/request-status';
 
 const DEBOUNCE_BAIRRO_MS = 350;
 

@@ -48,3 +48,13 @@ export interface DemandaDetalhe extends DemandaResumo {
   updatedAt: string;
   fotos: { id: string; url: string; larguraPx: number | null; alturaPx: number | null }[];
 }
+
+export interface HistoricoStatusItem {
+  id: string;
+  statusAnterior: RequestStatusValue | null;
+  statusNovo: RequestStatusValue;
+  usuarioId: string;
+  usuarioNome: string;
+  observacao: string | null;
+  createdAt: string;
+}
