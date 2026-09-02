@@ -8,6 +8,7 @@ export const STATUS_ANTES_DE_PROTOCOLAR: readonly RequestStatusValue[] = [
   'PENDENTE_INFORMACAO',
 ];
 
+// Mantenha em sincronia com backend/src/utils/request-status.ts (mesma tabela, duplicada por não haver pacote compartilhado entre backend e frontend; o backend é a fonte da verdade).
 export const TRANSICOES_VALIDAS: Record<RequestStatusValue, RequestStatusValue[]> = {
   RASCUNHO: [],
   ENVIADA: ['RECEBIDA', 'RECUSADA'],
