@@ -138,6 +138,9 @@ describe('RequestRepository.update', () => {
 });
 
 describe('RequestRepository.updateStatus', () => {
+  // Margem observada perto do timeout padrão de 5000ms sob latência real do Neon (1
+  // create + 1 updateStatus, cada um sua própria transação, + 1 leitura); ampliado só
+  // aqui pelo mesmo motivo dos demais testes desta suíte.
   it('atualiza o status e grava uma linha no histórico', async () => {
     const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-status-1' }), [fotoBase]);
 
@@ -150,7 +153,7 @@ describe('RequestRepository.updateStatus', () => {
     expect(historico[0]?.statusNovo).toBe('RECEBIDA');
     expect(historico[0]?.usuarioId).toBe(assessorId);
     expect(historico[0]?.observacao).toBeNull();
-  });
+  }, 20000);
 
   // 1 create + 3 updateStatus em sequência contra o Neon real; mesmo raciocínio dos testes
   // de paginação acima (timeout ampliado só aqui, não globalmente).
@@ -169,6 +172,8 @@ describe('RequestRepository.updateStatus', () => {
     expect(historico[2]?.observacao).toBe('Falta o telefone do solicitante');
   }, 20000);
 
+  // 1 create + 2 updateStatus (cada um sua própria transação) + 1 leitura em sequência
+  // contra o Neon real; mesmo raciocínio dos demais testes com timeout ampliado acima.
   it('grava arquivadoEm ao entrar em ARQUIVADA', async () => {
     const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-status-3' }), [fotoBase]);
     await requestRepo.updateStatus(criado.id, 'RECUSADA', assessorId, 'Duplicado');
@@ -177,7 +182,7 @@ describe('RequestRepository.updateStatus', () => {
 
     const linha = await prisma.request.findUniqueOrThrow({ where: { id: criado.id } });
     expect(linha.arquivadoEm).not.toBeNull();
-  });
+  }, 20000);
 });
 
 describe('RequestRepository.listarHistoricoStatus', () => {
@@ -204,6 +209,8 @@ describe('RequestRepository.listarHistoricoStatus', () => {
 });
 
 describe('RequestRepository.reatribuir', () => {
+  // 1 create + 2 user.create + 1 reatribuir (transação) + 1 leitura em sequência contra
+  // o Neon real; mesma margem apertada observada nos demais testes desta suíte.
   it('atualiza o assessor responsável e grava uma linha no histórico de reatribuição', async () => {
     const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-reatrib-1' }), [fotoBase]);
     const novoAssessor = await prisma.user.create({
@@ -221,5 +228,5 @@ describe('RequestRepository.reatribuir', () => {
     expect(historico[0]?.assessorAnteriorId).toBe(assessorId);
     expect(historico[0]?.assessorNovoId).toBe(novoAssessor.id);
     expect(historico[0]?.reatribuidoPorId).toBe(chefe.id);
-  });
+  }, 20000);
 });
