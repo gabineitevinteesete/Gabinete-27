@@ -9,9 +9,11 @@ import type {
 import type { RequestTypeRepository } from '../repositories/request-type.repository.js';
 import type { PhotoUploader } from './cloudinary-uploader.service.js';
 import type { UserRoleValue } from '../utils/jwt.js';
+import type { UserRepository } from '../repositories/user.repository.js';
+import type { HistoricoStatusItem } from '../repositories/request.repository.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
-import { podeEditarComoAssessorDeRua } from '../utils/request-status.js';
+import { transicaoValida, exigeMotivo, podeEditarComoAssessorDeRua, type RequestStatusValue } from '../utils/request-status.js';
 import { isValidBrazilianPhone, normalizePhone } from '../utils/phone.js';
 
 /** Foto como é servida à API: `url` é sempre assinada na hora, nunca a `url` pública guardada no banco. */
@@ -73,15 +75,38 @@ export type EditarDemandaResultado =
   | { status: 'descricao_outro_obrigatoria' }
   | { status: 'telefone_invalido' };
 
+export type MudarStatusResultado =
+  | { status: 'ok'; demanda: DemandaDetalhe }
+  | { status: 'nao_encontrada' }
+  | { status: 'transicao_invalida' }
+  | { status: 'motivo_obrigatorio' };
+
+export type ReatribuirResultado =
+  | { status: 'ok'; demanda: DemandaDetalhe }
+  | { status: 'nao_encontrada' }
+  | { status: 'assessor_invalido' };
+
+export type HistoricoStatusResultado =
+  | { status: 'ok'; historico: HistoricoStatusItem[] }
+  | { status: 'nao_encontrada' }
+  | { status: 'sem_permissao' };
+
 export class RequestService {
   private requestRepo: RequestRepository;
   private requestTypeRepo: RequestTypeRepository;
   private photoUploader: PhotoUploader;
+  private userRepo: UserRepository;
 
-  constructor(deps: { requestRepo: RequestRepository; requestTypeRepo: RequestTypeRepository; photoUploader: PhotoUploader }) {
+  constructor(deps: {
+    requestRepo: RequestRepository;
+    requestTypeRepo: RequestTypeRepository;
+    photoUploader: PhotoUploader;
+    userRepo: UserRepository;
+  }) {
     this.requestRepo = deps.requestRepo;
     this.requestTypeRepo = deps.requestTypeRepo;
     this.photoUploader = deps.photoUploader;
+    this.userRepo = deps.userRepo;
   }
 
   /**
@@ -234,6 +259,42 @@ export class RequestService {
     }
 
     const atualizado = await this.requestRepo.update(id, dados);
+    return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
+  }
+
+  async mudarStatus(
+    id: string,
+    novoStatus: RequestStatusValue,
+    motivo: string | undefined,
+    usuarioId: string,
+  ): Promise<MudarStatusResultado> {
+    const demanda = await this.requestRepo.findById(id);
+    if (!demanda) return { status: 'nao_encontrada' };
+    if (!transicaoValida(demanda.status, novoStatus)) return { status: 'transicao_invalida' };
+    if (exigeMotivo(novoStatus) && !motivo?.trim()) return { status: 'motivo_obrigatorio' };
+
+    const atualizado = await this.requestRepo.updateStatus(id, novoStatus, usuarioId, motivo);
+    return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
+  }
+
+  async listarHistoricoStatus(id: string, usuario: UsuarioAutenticado): Promise<HistoricoStatusResultado> {
+    const demanda = await this.requestRepo.findById(id);
+    if (!demanda) return { status: 'nao_encontrada' };
+    if (usuario.role === 'ASSESSOR_RUA' && demanda.assessorResponsavelId !== usuario.id) {
+      return { status: 'sem_permissao' };
+    }
+    const historico = await this.requestRepo.listarHistoricoStatus(id);
+    return { status: 'ok', historico };
+  }
+
+  async reatribuir(id: string, novoAssessorId: string, reatribuidoPorId: string): Promise<ReatribuirResultado> {
+    const demanda = await this.requestRepo.findById(id);
+    if (!demanda) return { status: 'nao_encontrada' };
+
+    const novoAssessor = await this.userRepo.findById(novoAssessorId);
+    if (!novoAssessor || !novoAssessor.ativo) return { status: 'assessor_invalido' };
+
+    const atualizado = await this.requestRepo.reatribuir(id, novoAssessorId, reatribuidoPorId);
     return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
   }
 }

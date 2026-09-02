@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 import { RequestService } from '../../src/services/request.service.js';
-import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader } from '../helpers/fakes.js';
+import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo } from '../helpers/fakes.js';
 
 async function fotoValida(): Promise<Buffer> {
   return sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer();
@@ -11,7 +11,8 @@ function buildService(tipos: Parameters<typeof createFakeRequestTypeRepo>[0]) {
   const requestTypeRepo = createFakeRequestTypeRepo(tipos);
   const requestRepo = createFakeRequestRepo();
   const photoUploader = createFakePhotoUploader();
-  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+  const userRepo = createFakeUserRepo();
+  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
   return { service, requestRepo, photoUploader };
 }
 
