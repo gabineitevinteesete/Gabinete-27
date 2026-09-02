@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { createRequestRepository, type CriarRequestInput } from '../../src/repositories/request.repository.js';
+import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
 
 const prisma = new PrismaClient();
 const requestRepo = createRequestRepository(prisma);
@@ -182,6 +183,21 @@ describe('RequestRepository.updateStatus', () => {
 
     const linha = await prisma.request.findUniqueOrThrow({ where: { id: criado.id } });
     expect(linha.arquivadoEm).not.toBeNull();
+  }, 20000);
+
+  // Prova a revalidação dentro da transação sem precisar de concorrência real: a primeira
+  // chamada já consumiu a transição, então a segunda chega com uma origem obsoleta —
+  // exatamente o que uma requisição concorrente veria.
+  it('rejeita uma transição que deixou de ser válida entre a leitura do service e a gravação', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-status-4' }), [fotoBase]);
+    await requestRepo.updateStatus(criado.id, 'RECEBIDA', assessorId);
+
+    await expect(requestRepo.updateStatus(criado.id, 'RECEBIDA', assessorId)).rejects.toBeInstanceOf(
+      TransicaoConcorrenteError,
+    );
+
+    const historico = await prisma.requestStatusHistory.findMany({ where: { requestId: criado.id } });
+    expect(historico).toHaveLength(1);
   }, 20000);
 });
 

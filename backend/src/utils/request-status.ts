@@ -22,6 +22,7 @@ export function podeEditarComoAssessorDeRua(status: RequestStatusValue): boolean
   return (STATUS_ANTES_DE_PROTOCOLAR as RequestStatusValue[]).includes(status);
 }
 
+// Mantenha em sincronia com frontend/src/lib/request-status.ts (mesma tabela, duplicada por não haver pacote compartilhado entre backend e frontend).
 export const TRANSICOES_VALIDAS: Record<RequestStatusValue, RequestStatusValue[]> = {
   RASCUNHO: [],
   ENVIADA: ['RECEBIDA', 'RECUSADA'],
@@ -43,4 +44,15 @@ const STATUS_QUE_EXIGEM_MOTIVO: readonly RequestStatusValue[] = ['PENDENTE_INFOR
 
 export function exigeMotivo(novoStatus: RequestStatusValue): boolean {
   return (STATUS_QUE_EXIGEM_MOTIVO as RequestStatusValue[]).includes(novoStatus);
+}
+
+/**
+ * A transição já era válida quando o service checou, mas outra requisição concorrente mudou o
+ * status antes desta gravar. Lançada pela revalidação feita dentro da transação do repositório.
+ */
+export class TransicaoConcorrenteError extends Error {
+  constructor() {
+    super('Transição de status inválida para o status atual da demanda');
+    this.name = 'TransicaoConcorrenteError';
+  }
 }
