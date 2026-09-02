@@ -294,9 +294,23 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
       return prisma.$transaction(async (tx) => {
         const atual = await tx.request.findUniqueOrThrow({ where: { id } });
         // Revalida contra a leitura fresca dentro da transação: o service validou fora dela e
-        // uma requisição concorrente pode ter mudado o status nesse meio-tempo (o histórico
-        // ficaria com duas linhas alegando a mesma origem).
+        // uma requisição concorrente pode ter mudado o status nesse meio-tempo.
         if (!transicaoValida(atual.status as RequestStatusValue, novoStatus)) {
+          throw new TransicaoConcorrenteError();
+        }
+        // updateMany com o status antigo no WHERE (em vez de update por id) fecha de vez a
+        // janela de corrida: sob READ COMMITTED, o UPDATE trava a linha e reavalia o WHERE
+        // após o lock, então uma segunda transação concorrente que também passou na checagem
+        // acima só ganha a corrida se ainda enxergar o status esperado no momento do commit —
+        // a perdedora afeta 0 linhas aqui, mesmo tendo lido o mesmo `atual.status`.
+        const { count } = await tx.request.updateMany({
+          where: { id, status: atual.status },
+          data: {
+            status: novoStatus,
+            ...(novoStatus === 'ARQUIVADA' ? { arquivadoEm: new Date() } : {}),
+          },
+        });
+        if (count === 0) {
           throw new TransicaoConcorrenteError();
         }
         await tx.requestStatusHistory.create({
@@ -308,14 +322,7 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
             observacao: motivo,
           },
         });
-        const atualizado = await tx.request.update({
-          where: { id },
-          data: {
-            status: novoStatus,
-            ...(novoStatus === 'ARQUIVADA' ? { arquivadoEm: new Date() } : {}),
-          },
-          include: INCLUDE_DETALHE,
-        });
+        const atualizado = await tx.request.findUniqueOrThrow({ where: { id }, include: INCLUDE_DETALHE });
         return toDetail(atualizado);
       });
     },
