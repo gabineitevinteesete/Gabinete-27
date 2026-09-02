@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { apiClient, ApiError } from '@/services/api-client';
 import type { PublicUser } from '@/types/auth';
+import type { DemandaDetalhe } from '@/types/request';
 
 interface ReatribuirDemandaProps {
   demandaId: string;
   assessorAtualId: string;
-  onReatribuido: (demanda: { id: string; assessorResponsavelId: string }) => void;
+  onReatribuido: (demanda: DemandaDetalhe) => void;
 }
 
 export function ReatribuirDemanda({ demandaId, assessorAtualId, onReatribuido }: ReatribuirDemandaProps) {
@@ -19,7 +20,9 @@ export function ReatribuirDemanda({ demandaId, assessorAtualId, onReatribuido }:
   useEffect(() => {
     apiClient
       .request<PublicUser[]>('/usuarios?ativo=true', { auth: true })
-      .then((lista) => setAssessores(lista.filter((u) => u.id !== assessorAtualId)))
+      // Chefe não é destino válido de reatribuição (o backend também recusa) — a lista só
+      // oferece assessores, e nunca quem já é o responsável.
+      .then((lista) => setAssessores(lista.filter((u) => u.id !== assessorAtualId && u.role !== 'CHEFE')))
       .catch(() => setAssessores([]));
   }, [assessorAtualId]);
 
@@ -28,10 +31,14 @@ export function ReatribuirDemanda({ demandaId, assessorAtualId, onReatribuido }:
     setErro(null);
     setEnviando(true);
     try {
-      const demanda = await apiClient.request<{ id: string; assessorResponsavelId: string }>(
-        `/demandas/${demandaId}/reatribuir`,
-        { method: 'PATCH', auth: true, body: { novoAssessorId: selecionadoId } },
-      );
+      const demanda = await apiClient.request<DemandaDetalhe>(`/demandas/${demandaId}/reatribuir`, {
+        method: 'PATCH',
+        auth: true,
+        body: { novoAssessorId: selecionadoId },
+      });
+      // Sem isto o id selecionado sobrevive ao refetch que remove esse assessor da lista: o
+      // select fica em branco mas o botão continua habilitado, reenviando a mesma reatribuição.
+      setSelecionadoId('');
       onReatribuido(demanda);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível reatribuir. Tente novamente.');
