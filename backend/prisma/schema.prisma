@@ -201,6 +201,7 @@ model InternalNote {
   autor     User     @relation("InternalNoteAuthor", fields: [autorId], references: [id])
   texto     String
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime? @db.Timestamptz(3)
 
   @@index([requestId])
   @@map("internal_notes")
