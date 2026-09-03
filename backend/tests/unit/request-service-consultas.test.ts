@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RequestService } from '../../src/services/request.service.js';
-import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader } from '../helpers/fakes.js';
+import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo } from '../helpers/fakes.js';
+import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
 
 function buildService() {
   const requestTypeRepo = createFakeRequestTypeRepo([
@@ -8,8 +9,11 @@ function buildService() {
   ]);
   const requestRepo = createFakeRequestRepo();
   const photoUploader = createFakePhotoUploader();
-  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
-  return { service, requestRepo };
+  const userRepo = createFakeUserRepo([
+    { id: 'gabinete-1', nome: 'Gabinete', telefone: '+5534988880001', role: 'ASSESSOR_GABINETE', ativo: true, pinDefinido: true, pinHash: null, createdAt: new Date(), updatedAt: new Date() },
+  ]);
+  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
+  return { service, requestRepo, userRepo };
 }
 
 async function criarDemandaFake(requestRepo: ReturnType<typeof createFakeRequestRepo>, assessorId: string, status = 'ENVIADA') {
@@ -152,7 +156,8 @@ describe('RequestService.editar', () => {
     ]);
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const userRepo = createFakeUserRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
     const demanda = await criarDemandaFake(requestRepo, 'user-eu');
 
     const resultado = await service.editar(
@@ -170,7 +175,8 @@ describe('RequestService.editar', () => {
     ]);
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const userRepo = createFakeUserRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
     const demanda = await criarDemandaFake(requestRepo, 'user-eu');
 
     const resultado = await service.editar(
@@ -187,7 +193,8 @@ describe('RequestService.editar', () => {
     ]);
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const userRepo = createFakeUserRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
     const demanda = await requestRepo.create(
       {
         codigoInterno: 'GD-outros',
@@ -241,7 +248,8 @@ describe('RequestService.editar', () => {
     ]);
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+    const userRepo = createFakeUserRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
     const demanda = await criarDemandaFake(requestRepo, 'user-eu');
 
     const resultado = await service.editar(
@@ -250,5 +258,148 @@ describe('RequestService.editar', () => {
       { id: 'user-eu', role: 'ASSESSOR_RUA' },
     );
     expect(resultado.status).toBe('ok');
+  });
+});
+
+describe('RequestService.mudarStatus', () => {
+  it('avança o status quando a transição é válida', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.mudarStatus(demanda.id, 'RECEBIDA', undefined, 'gabinete-1');
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status === 'ok') {
+      expect(resultado.demanda.status).toBe('RECEBIDA');
+    }
+  });
+
+  it('rejeita uma transição fora da máquina de estados', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.mudarStatus(demanda.id, 'PROTOCOLADA', undefined, 'gabinete-1');
+
+    expect(resultado.status).toBe('transicao_invalida');
+  });
+
+  it('exige motivo para PENDENTE_INFORMACAO', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+    await service.mudarStatus(demanda.id, 'RECEBIDA', undefined, 'gabinete-1');
+    await service.mudarStatus(demanda.id, 'EM_CONFERENCIA', undefined, 'gabinete-1');
+
+    const semMotivo = await service.mudarStatus(demanda.id, 'PENDENTE_INFORMACAO', undefined, 'gabinete-1');
+    expect(semMotivo.status).toBe('motivo_obrigatorio');
+
+    const comMotivo = await service.mudarStatus(demanda.id, 'PENDENTE_INFORMACAO', 'Falta telefone', 'gabinete-1');
+    expect(comMotivo.status).toBe('ok');
+  });
+
+  it('retorna nao_encontrada para um id inexistente', async () => {
+    const { service } = buildService();
+    const resultado = await service.mudarStatus('id-inexistente', 'RECEBIDA', undefined, 'gabinete-1');
+    expect(resultado.status).toBe('nao_encontrada');
+  });
+
+  it('traduz a corrida perdida na transação (TransicaoConcorrenteError) para transicao_invalida', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+    // Simula outra requisição tendo mudado o status entre o findById do service e a gravação:
+    // a checagem que o repositório real faz dentro da transação é a que rejeita.
+    requestRepo.updateStatus = async () => {
+      throw new TransicaoConcorrenteError();
+    };
+
+    const resultado = await service.mudarStatus(demanda.id, 'RECEBIDA', undefined, 'gabinete-1');
+
+    expect(resultado.status).toBe('transicao_invalida');
+  });
+});
+
+describe('RequestService.listarHistoricoStatus', () => {
+  it('assessor de rua vê o histórico da própria demanda', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+    await service.mudarStatus(demanda.id, 'RECEBIDA', undefined, 'gabinete-1');
+
+    const resultado = await service.listarHistoricoStatus(demanda.id, { id: 'user-eu', role: 'ASSESSOR_RUA' });
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status === 'ok') {
+      expect(resultado.historico).toHaveLength(1);
+    }
+  });
+
+  it('assessor de rua não vê o histórico de demanda de outro', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-outro');
+
+    const resultado = await service.listarHistoricoStatus(demanda.id, { id: 'user-eu', role: 'ASSESSOR_RUA' });
+
+    expect(resultado.status).toBe('sem_permissao');
+  });
+});
+
+describe('RequestService.reatribuir', () => {
+  it('reatribui para um assessor ativo', async () => {
+    const { service, requestRepo, userRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-original');
+    await userRepo.create({ nome: 'Novo Assessor', telefone: '+5534988880002', role: 'ASSESSOR_RUA' });
+    const novoAssessor = userRepo.users.find((u) => u.nome === 'Novo Assessor')!;
+
+    const resultado = await service.reatribuir(demanda.id, novoAssessor.id, 'chefe-1');
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status === 'ok') {
+      expect(resultado.demanda.assessorResponsavelId).toBe(novoAssessor.id);
+    }
+  });
+
+  it('rejeita reatribuir para um assessor inexistente', async () => {
+    const { service, requestRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-original');
+
+    const resultado = await service.reatribuir(demanda.id, 'id-que-nao-existe', 'chefe-1');
+
+    expect(resultado.status).toBe('assessor_invalido');
+  });
+
+  it('rejeita reatribuir para um assessor inativo', async () => {
+    const { service, requestRepo, userRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-original');
+    await userRepo.create({ nome: 'Assessor Inativo', telefone: '+5534988880003', role: 'ASSESSOR_RUA' });
+    const inativo = userRepo.users.find((u) => u.nome === 'Assessor Inativo')!;
+    await userRepo.setAtivo(inativo.id, false);
+
+    const resultado = await service.reatribuir(demanda.id, inativo.id, 'chefe-1');
+
+    expect(resultado.status).toBe('assessor_invalido');
+  });
+
+  it('rejeita reatribuir para um chefe', async () => {
+    const { service, requestRepo, userRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-original');
+    await userRepo.create({ nome: 'Outro Chefe', telefone: '+5534988880004', role: 'CHEFE' });
+    const chefe = userRepo.users.find((u) => u.nome === 'Outro Chefe')!;
+
+    const resultado = await service.reatribuir(demanda.id, chefe.id, 'chefe-1');
+
+    expect(resultado.status).toBe('assessor_invalido');
+  });
+
+  it('reatribuir para o assessor que já é o responsável é no-op e não grava histórico', async () => {
+    const { service, requestRepo, userRepo } = buildService();
+    await userRepo.create({ nome: 'Assessor Atual', telefone: '+5534988880005', role: 'ASSESSOR_RUA' });
+    const atual = userRepo.users.find((u) => u.nome === 'Assessor Atual')!;
+    const demanda = await criarDemandaFake(requestRepo, atual.id);
+
+    const resultado = await service.reatribuir(demanda.id, atual.id, 'chefe-1');
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status === 'ok') {
+      expect(resultado.demanda.assessorResponsavelId).toBe(atual.id);
+    }
+    expect(requestRepo.historicoReatribuicao).toHaveLength(0);
   });
 });

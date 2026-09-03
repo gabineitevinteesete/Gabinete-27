@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DemandaDetalhePage from './page';
 
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'demanda-1' }) }));
@@ -15,6 +15,37 @@ vi.mock('@/services/api-client', async () => {
   return { ...actual, apiClient: { ...actual.apiClient, request: vi.fn() } };
 });
 import { apiClient } from '@/services/api-client';
+
+vi.mock('@/components/StatusActions', () => ({
+  StatusActions: ({
+    statusAtual,
+    onStatusAlterado,
+  }: {
+    statusAtual: string;
+    onStatusAlterado: (demanda: Record<string, unknown>) => void;
+  }) => (
+    <div>
+      <span>Ações de status ({statusAtual})</span>
+      <button
+        type="button"
+        onClick={() => onStatusAlterado({ status: 'RECEBIDA', assessorResponsavelNome: 'Assessor Novo' })}
+      >
+        simular mudança de status
+      </button>
+    </div>
+  ),
+}));
+vi.mock('@/components/HistoricoStatus', () => ({
+  HistoricoStatus: ({ versao }: { versao?: number }) => (
+    <div>
+      <span>Histórico de status</span>
+      <span>{`versão do histórico: ${versao}`}</span>
+    </div>
+  ),
+}));
+vi.mock('@/components/ReatribuirDemanda', () => ({
+  ReatribuirDemanda: () => <div>Reatribuir demanda</div>,
+}));
 
 function demandaFake(overrides: Record<string, unknown> = {}) {
   return {
@@ -72,5 +103,71 @@ describe('DemandaDetalhePage', () => {
     render(<DemandaDetalhePage />);
 
     expect(await screen.findByRole('link', { name: /editar/i })).toBeInTheDocument();
+  });
+
+  it('mostra as ações de status e o histórico para gabinete', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+
+    expect(await screen.findByText(/Ações de status/)).toBeInTheDocument();
+    expect(screen.getByText('Histórico de status')).toBeInTheDocument();
+  });
+
+  it('não mostra ações de status para assessor de rua', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-dono', role: 'ASSESSOR_RUA' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+    await screen.findByText('Buraco na rua');
+
+    expect(screen.queryByText(/Ações de status/)).not.toBeInTheDocument();
+    expect(screen.getByText('Histórico de status')).toBeInTheDocument();
+  });
+
+  it('mostra reatribuir só para o chefe', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'chefe-1', role: 'CHEFE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+
+    expect(await screen.findByText('Reatribuir demanda')).toBeInTheDocument();
+  });
+
+  it('não mostra reatribuir para gabinete', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+    await screen.findByText('Buraco na rua');
+
+    expect(screen.queryByText('Reatribuir demanda')).not.toBeInTheDocument();
+  });
+
+  it('mostra o status atual da demanda', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-dono', role: 'ASSESSOR_RUA' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake({ status: 'EM_CONFERENCIA' }));
+
+    render(<DemandaDetalhePage />);
+
+    expect(await screen.findByText('Em conferência')).toBeInTheDocument();
+  });
+
+  it('atualiza o status na tela e força o refetch do histórico depois de uma mudança', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+    expect(await screen.findByText('Enviada')).toBeInTheDocument();
+    expect(screen.getByText('versão do histórico: 0')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /simular mudança de status/i }));
+
+    await waitFor(() => expect(screen.getByText('Recebida')).toBeInTheDocument());
+    expect(screen.getByText('versão do histórico: 1')).toBeInTheDocument();
+    // A resposta do PATCH é mesclada inteira, então campos como o nome do responsável
+    // acompanham a mudança em vez de ficarem congelados no valor antigo.
+    expect(screen.getByText('Assessor Novo')).toBeInTheDocument();
   });
 });

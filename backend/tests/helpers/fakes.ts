@@ -13,6 +13,7 @@ import type {
   ListarFiltro,
   Paginacao,
 } from '../../src/repositories/request.repository.js';
+import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../../src/utils/request-status.js';
 import { randomUUID } from 'node:crypto';
 
 type StoredUser = PublicUser & { pinHash: string | null };
@@ -172,15 +173,36 @@ export function createFakeRequestTypeRepo(
   };
 }
 
+interface FakeHistoricoStatus {
+  requestId: string;
+  statusAnterior: RequestStatusValue | null;
+  statusNovo: RequestStatusValue;
+  usuarioId: string;
+  observacao: string | null;
+  createdAt: Date;
+}
+
+interface FakeHistoricoReatribuicao {
+  requestId: string;
+  assessorAnteriorId: string;
+  assessorNovoId: string;
+  reatribuidoPorId: string;
+  createdAt: Date;
+}
+
 export function createFakeRequestRepo(): RequestRepository & {
   created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[];
+  historicoReatribuicao: FakeHistoricoReatribuicao[];
 } {
   const created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[] = [];
   const store: RequestDetail[] = [];
   let contador = 0;
+  const historicoStatus: FakeHistoricoStatus[] = [];
+  const historicoReatribuicao: FakeHistoricoReatribuicao[] = [];
 
   return {
     created,
+    historicoReatribuicao,
     async create(input, fotos) {
       created.push({ input, fotos });
       contador += 1;
@@ -245,6 +267,50 @@ export function createFakeRequestRepo(): RequestRepository & {
       const existente = store.find((r) => r.id === id);
       if (!existente) throw new Error('Request não encontrada (fake)');
       Object.assign(existente, input);
+      return existente;
+    },
+    async updateStatus(id, novoStatus, usuarioId, motivo) {
+      const existente = store.find((r) => r.id === id);
+      if (!existente) throw new Error('Request não encontrada (fake)');
+      // Espelha a revalidação que o repositório real faz dentro da transação.
+      if (!transicaoValida(existente.status, novoStatus)) throw new TransicaoConcorrenteError();
+      historicoStatus.push({
+        requestId: id,
+        statusAnterior: existente.status,
+        statusNovo: novoStatus,
+        usuarioId,
+        observacao: motivo ?? null,
+        createdAt: new Date(),
+      });
+      existente.status = novoStatus;
+      return existente;
+    },
+    async listarHistoricoStatus(id) {
+      return historicoStatus
+        .filter((h) => h.requestId === id)
+        .slice()
+        .reverse()
+        .map((h, i) => ({
+          id: `historico-${id}-${i}`,
+          statusAnterior: h.statusAnterior,
+          statusNovo: h.statusNovo,
+          usuarioId: h.usuarioId,
+          usuarioNome: 'Usuário Fake',
+          observacao: h.observacao,
+          createdAt: h.createdAt,
+        }));
+    },
+    async reatribuir(id, novoAssessorId, reatribuidoPorId) {
+      const existente = store.find((r) => r.id === id);
+      if (!existente) throw new Error('Request não encontrada (fake)');
+      historicoReatribuicao.push({
+        requestId: id,
+        assessorAnteriorId: existente.assessorResponsavelId,
+        assessorNovoId: novoAssessorId,
+        reatribuidoPorId,
+        createdAt: new Date(),
+      });
+      existente.assessorResponsavelId = novoAssessorId;
       return existente;
     },
   };

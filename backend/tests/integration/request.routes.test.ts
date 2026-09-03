@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { hash } from '@node-rs/argon2';
 import { buildTestApp } from '../helpers/build-test-app.js';
 import { testPrisma, resetDb } from '../helpers/reset-db.js';
+import type { UserRoleValue } from '../../src/utils/jwt.js';
 
 const app = buildTestApp();
 
@@ -22,7 +23,7 @@ async function fotoValida(): Promise<Buffer> {
   return sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 5, g: 5, b: 5 } } }).jpeg().toBuffer();
 }
 
-async function loginComoAssessor(role: 'ASSESSOR_RUA' | 'ASSESSOR_GABINETE' = 'ASSESSOR_RUA', telefone = '+5534999998000') {
+async function loginComoAssessor(role: UserRoleValue = 'ASSESSOR_RUA', telefone = '+5534999998000') {
   const assessor = await testPrisma.user.create({
     data: { nome: 'Assessor', telefone, role, ativo: true, pinDefinido: true, pinHash: await hash('482913') },
   });
@@ -318,4 +319,163 @@ describe('PATCH /demandas/:id', () => {
 
     expect(editada.status).toBe(400);
   }, 30000); // Neon real via rede: login + upload/processamento de 2 fotos passa de 20s neste ambiente.
+});
+
+async function criarDemandaViaApi(tipoId: string, accessToken: string) {
+  const foto1 = await fotoValida();
+  const foto2 = await fotoValida();
+  const res = await request(app)
+    .post('/demandas')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .field(camposBase(tipoId))
+    .attach('fotos', foto1, 'foto1.jpg')
+    .attach('fotos', foto2, 'foto2.jpg');
+  return res.body.data as { id: string };
+}
+
+describe('PATCH /demandas/:id/status', () => {
+  it('avança o status quando gabinete faz uma transição válida', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998001');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998002');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/status`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ novoStatus: 'RECEBIDA' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('RECEBIDA');
+  }, 30000); // Neon real via rede.
+
+  it('rejeita uma transição inválida com 400', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998003');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998004');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/status`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ novoStatus: 'PROTOCOLADA' });
+
+    expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
+
+  it('rejeita PENDENTE_INFORMACAO sem motivo com 400', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998005');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998006');
+    await request(app).patch(`/demandas/${demanda.id}/status`).set('Authorization', `Bearer ${tokenGabinete}`).send({ novoStatus: 'RECEBIDA' });
+    await request(app).patch(`/demandas/${demanda.id}/status`).set('Authorization', `Bearer ${tokenGabinete}`).send({ novoStatus: 'EM_CONFERENCIA' });
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/status`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ novoStatus: 'PENDENTE_INFORMACAO' });
+
+    expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
+
+  it('bloqueia assessor de rua com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998007');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/status`)
+      .set('Authorization', `Bearer ${tokenRua}`)
+      .send({ novoStatus: 'RECEBIDA' });
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+});
+
+describe('GET /demandas/:id/historico-status', () => {
+  it('assessor de rua vê o histórico da própria demanda', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998008');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998009');
+    await request(app).patch(`/demandas/${demanda.id}/status`).set('Authorization', `Bearer ${tokenGabinete}`).send({ novoStatus: 'RECEBIDA' });
+
+    const res = await request(app).get(`/demandas/${demanda.id}/historico-status`).set('Authorization', `Bearer ${tokenRua}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  }, 30000); // Neon real via rede.
+
+  it('bloqueia assessor de rua vendo histórico de demanda de outro com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenDono } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998010');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenDono);
+    const { accessToken: tokenOutro } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998011');
+
+    const res = await request(app).get(`/demandas/${demanda.id}/historico-status`).set('Authorization', `Bearer ${tokenOutro}`);
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+});
+
+describe('PATCH /demandas/:id/reatribuir', () => {
+  it('chefe reatribui a demanda para outro assessor', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998012');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998013');
+    const { assessor: novoAssessor } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998014');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/reatribuir`)
+      .set('Authorization', `Bearer ${tokenChefe}`)
+      .send({ novoAssessorId: novoAssessor.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.assessorResponsavelId).toBe(novoAssessor.id);
+  }, 30000); // Neon real via rede.
+
+  it('bloqueia assessor de gabinete tentando reatribuir com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998015');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete, assessor } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998016');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/reatribuir`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ novoAssessorId: assessor.id });
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('rejeita reatribuir para um id inexistente com 400', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998017');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998018');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/reatribuir`)
+      .set('Authorization', `Bearer ${tokenChefe}`)
+      .send({ novoAssessorId: '11111111-1111-1111-1111-111111111111' });
+
+    expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
+
+  it('rejeita reatribuir para um chefe com 400', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998019');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998020');
+    const { assessor: outroChefe } = await loginComoAssessor('CHEFE', '+5534999998021');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/reatribuir`)
+      .set('Authorization', `Bearer ${tokenChefe}`)
+      .send({ novoAssessorId: outroChefe.id });
+
+    expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
 });

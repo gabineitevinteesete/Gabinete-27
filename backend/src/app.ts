@@ -44,7 +44,7 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
       apiKey: env.CLOUDINARY_API_KEY,
       apiSecret: env.CLOUDINARY_API_SECRET,
     });
-  const requestService = new RequestService({ requestRepo, requestTypeRepo, photoUploader });
+  const requestService = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
 
   const authService = new AuthService({ userRepo, refreshTokenRepo, loginAttemptRepo, auditLogRepo });
   const userService = new UserService({ userRepo, auditLogRepo });
