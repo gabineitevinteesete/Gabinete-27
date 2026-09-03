@@ -59,6 +59,11 @@ async function criarDemanda(codigoInterno: string) {
   return requestRepo.create(inputBase({ codigoInterno }), [fotoBase]);
 }
 
+// Todos os testes deste arquivo fazem pelo menos uma criação de demanda (com foto) mais
+// uma ou mais chamadas ao repositório de observações, cada uma um round trip real ao Neon;
+// medido entre 5-8s neste ambiente, acima do timeout padrão de 5000ms do Vitest sob variação
+// de latência. Timeout ampliado em todos os testes deste arquivo (não globalmente) pelo
+// mesmo motivo já documentado em outros arquivos de integração deste projeto.
 describe('InternalNoteRepository.create', () => {
   it('cria a observação com autor e sem updatedAt', async () => {
     const demanda = await criarDemanda('GD-obs-1');
@@ -70,7 +75,7 @@ describe('InternalNoteRepository.create', () => {
     expect(criada.autorNome).toBe('Assessor Teste');
     expect(criada.requestId).toBe(demanda.id);
     expect(criada.updatedAt).toBeNull();
-  });
+  }, 20000);
 });
 
 describe('InternalNoteRepository.list', () => {
@@ -84,7 +89,7 @@ describe('InternalNoteRepository.list', () => {
     expect(lista).toHaveLength(2);
     expect(lista[0]?.texto).toBe('Segunda nota');
     expect(lista[1]?.texto).toBe('Primeira nota');
-  });
+  }, 20000);
 
   it('não retorna observações de outra demanda', async () => {
     const demandaA = await criarDemanda('GD-obs-3');
@@ -96,14 +101,14 @@ describe('InternalNoteRepository.list', () => {
 
     expect(lista).toHaveLength(1);
     expect(lista[0]?.texto).toBe('Nota da A');
-  });
+  }, 20000);
 });
 
 describe('InternalNoteRepository.findById', () => {
   it('retorna null quando não existe', async () => {
     const encontrada = await internalNoteRepo.findById('00000000-0000-0000-0000-000000000000');
     expect(encontrada).toBeNull();
-  });
+  }, 20000);
 
   it('retorna a observação quando existe', async () => {
     const demanda = await criarDemanda('GD-obs-5');
@@ -112,7 +117,7 @@ describe('InternalNoteRepository.findById', () => {
     const encontrada = await internalNoteRepo.findById(criada.id);
 
     expect(encontrada?.texto).toBe('Nota');
-  });
+  }, 20000);
 });
 
 describe('InternalNoteRepository.update', () => {
@@ -124,7 +129,7 @@ describe('InternalNoteRepository.update', () => {
 
     expect(atualizada.texto).toBe('Texto corrigido');
     expect(atualizada.updatedAt).not.toBeNull();
-  });
+  }, 20000);
 });
 
 describe('InternalNoteRepository.delete', () => {
@@ -136,5 +141,5 @@ describe('InternalNoteRepository.delete', () => {
 
     const encontrada = await internalNoteRepo.findById(criada.id);
     expect(encontrada).toBeNull();
-  });
+  }, 20000);
 });
