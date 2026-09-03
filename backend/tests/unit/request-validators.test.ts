@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, demandaIdParamsSchema } from '../../src/validators/request.validators.js';
+import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../../src/validators/request.validators.js';
 
 function corpoBase(overrides: Record<string, string> = {}) {
   return {
@@ -111,5 +111,39 @@ describe('demandaIdParamsSchema', () => {
 
   it('rejeita um id malformado', () => {
     expect(() => demandaIdParamsSchema.parse({ id: 'nao-e-uuid' })).toThrow();
+  });
+});
+
+describe('mudarStatusSchema', () => {
+  it('aceita novoStatus sem motivo', () => {
+    const resultado = mudarStatusSchema.safeParse({ novoStatus: 'RECEBIDA' });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('aceita novoStatus com motivo', () => {
+    const resultado = mudarStatusSchema.safeParse({ novoStatus: 'RECUSADA', motivo: 'Duplicado' });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('rejeita um status fora do enum', () => {
+    const resultado = mudarStatusSchema.safeParse({ novoStatus: 'INEXISTENTE' });
+    expect(resultado.success).toBe(false);
+  });
+
+  it('rejeita quando novoStatus não é informado', () => {
+    const resultado = mudarStatusSchema.safeParse({});
+    expect(resultado.success).toBe(false);
+  });
+});
+
+describe('reatribuirSchema', () => {
+  it('aceita um uuid válido', () => {
+    const resultado = reatribuirSchema.safeParse({ novoAssessorId: '11111111-1111-1111-1111-111111111111' });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('rejeita um id que não é uuid', () => {
+    const resultado = reatribuirSchema.safeParse({ novoAssessorId: 'nao-e-um-uuid' });
+    expect(resultado.success).toBe(false);
   });
 });

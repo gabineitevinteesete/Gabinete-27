@@ -5,14 +5,19 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient } from '@/services/api-client';
 import { useAuth } from '@/hooks/use-auth';
-import { STATUS_ANTES_DE_PROTOCOLAR } from '@/lib/request-status';
+import { STATUS_ANTES_DE_PROTOCOLAR, STATUS_LABEL } from '@/lib/request-status';
 import type { DemandaDetalhe } from '@/types/request';
+import { StatusActions } from '@/components/StatusActions';
+import { HistoricoStatus } from '@/components/HistoricoStatus';
+import { ReatribuirDemanda } from '@/components/ReatribuirDemanda';
 
 export default function DemandaDetalhePage() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
   const [demanda, setDemanda] = useState<DemandaDetalhe | null>(null);
   const [carregando, setCarregando] = useState(true);
+  // Incrementado a cada ação que muda o histórico, para o timeline refazer o fetch.
+  const [versaoHistorico, setVersaoHistorico] = useState(0);
 
   useEffect(() => {
     apiClient
@@ -39,6 +44,9 @@ export default function DemandaDetalhePage() {
       demanda.assessorResponsavelId === user.id &&
       (STATUS_ANTES_DE_PROTOCOLAR as string[]).includes(demanda.status));
 
+  const podeMudarStatus = user?.role === 'ASSESSOR_GABINETE' || user?.role === 'CHEFE';
+  const ehChefe = user?.role === 'CHEFE';
+
   return (
     <div className="flex flex-col gap-4 rounded-card bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
@@ -53,7 +61,12 @@ export default function DemandaDetalhePage() {
         )}
       </div>
 
-      <p className="text-xs text-gray-500">Código {demanda.codigoInterno} — {demanda.requestTypeNome}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs text-gray-500">Código {demanda.codigoInterno} — {demanda.requestTypeNome}</p>
+        <span className="inline-block rounded-full bg-primary-light px-3 py-1 text-xs font-medium text-primary-dark">
+          {STATUS_LABEL[demanda.status] ?? demanda.status}
+        </span>
+      </div>
 
       <div className="flex gap-2 overflow-x-auto">
         {demanda.fotos.map((foto) => (
@@ -82,6 +95,35 @@ export default function DemandaDetalhePage() {
       <div>
         <p className="text-xs font-medium text-gray-600">Assessor responsável</p>
         <p className="text-sm text-gray-900">{demanda.assessorResponsavelNome}</p>
+      </div>
+
+      {podeMudarStatus && (
+        <StatusActions
+          demandaId={demanda.id}
+          statusAtual={demanda.status}
+          onStatusAlterado={(atualizado) => {
+            // A resposta do PATCH já é a demanda inteira e atualizada — mesclar tudo evita
+            // deixar campos derivados (nome do responsável, updatedAt) desatualizados na tela.
+            setDemanda((prev) => (prev ? { ...prev, ...atualizado } : prev));
+            setVersaoHistorico((v) => v + 1);
+          }}
+        />
+      )}
+
+      {ehChefe && (
+        <ReatribuirDemanda
+          demandaId={demanda.id}
+          assessorAtualId={demanda.assessorResponsavelId}
+          onReatribuido={(atualizado) => {
+            setDemanda((prev) => (prev ? { ...prev, ...atualizado } : prev));
+            setVersaoHistorico((v) => v + 1);
+          }}
+        />
+      )}
+
+      <div>
+        <p className="text-xs font-medium text-gray-600">Histórico</p>
+        <HistoricoStatus demandaId={demanda.id} versao={versaoHistorico} />
       </div>
     </div>
   );

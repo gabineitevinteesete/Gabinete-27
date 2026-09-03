@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { RequestService } from '../services/request.service.js';
-import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, demandaIdParamsSchema } from '../validators/request.validators.js';
+import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../validators/request.validators.js';
 import { HttpError } from '../middlewares/error-handler.js';
 
 export function createRequestController(requestService: RequestService) {
@@ -70,6 +70,35 @@ export function createRequestController(requestService: RequestService) {
       if (resultado.status === 'telefone_invalido') {
         throw new HttpError(400, 'Telefone do solicitante inválido');
       }
+      res.json({ success: true, data: resultado.demanda });
+    },
+
+    async mudarStatus(req: Request, res: Response) {
+      const { id } = demandaIdParamsSchema.parse(req.params);
+      const dados = mudarStatusSchema.parse(req.body);
+      const resultado = await requestService.mudarStatus(id, dados.novoStatus, dados.motivo, req.user!.id);
+      if (resultado.status === 'nao_encontrada') throw new HttpError(404, 'Demanda não encontrada');
+      if (resultado.status === 'transicao_invalida') throw new HttpError(400, 'Transição de status inválida');
+      if (resultado.status === 'motivo_obrigatorio') {
+        throw new HttpError(400, 'É necessário informar o motivo para esta transição');
+      }
+      res.json({ success: true, data: resultado.demanda });
+    },
+
+    async historicoStatus(req: Request, res: Response) {
+      const { id } = demandaIdParamsSchema.parse(req.params);
+      const resultado = await requestService.listarHistoricoStatus(id, req.user!);
+      if (resultado.status === 'nao_encontrada') throw new HttpError(404, 'Demanda não encontrada');
+      if (resultado.status === 'sem_permissao') throw new HttpError(403, 'Você não tem acesso a esta demanda');
+      res.json({ success: true, data: resultado.historico });
+    },
+
+    async reatribuir(req: Request, res: Response) {
+      const { id } = demandaIdParamsSchema.parse(req.params);
+      const dados = reatribuirSchema.parse(req.body);
+      const resultado = await requestService.reatribuir(id, dados.novoAssessorId, req.user!.id);
+      if (resultado.status === 'nao_encontrada') throw new HttpError(404, 'Demanda não encontrada');
+      if (resultado.status === 'assessor_invalido') throw new HttpError(400, 'Assessor inválido ou inativo');
       res.json({ success: true, data: resultado.demanda });
     },
   };

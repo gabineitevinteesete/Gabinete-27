@@ -13,7 +13,7 @@ const booleanDeString = z.preprocess((valor) => valor === 'true' || valor === tr
  */
 const enderecoOpcional = z.preprocess((valor) => (valor === '' ? undefined : valor), z.string().optional());
 
-const statusEnum = z.enum([
+export const statusEnum = z.enum([
   'RASCUNHO',
   'ENVIADA',
   'RECEBIDA',
@@ -64,3 +64,12 @@ export const listarDemandasQuerySchema = z.object({
 });
 
 export const demandaIdParamsSchema = z.object({ id: z.string().uuid() });
+
+export const mudarStatusSchema = z.object({
+  novoStatus: statusEnum,
+  motivo: z.string().optional(),
+});
+
+export const reatribuirSchema = z.object({
+  novoAssessorId: z.string().uuid(),
+});
