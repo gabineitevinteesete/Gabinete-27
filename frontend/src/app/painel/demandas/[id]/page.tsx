@@ -10,6 +10,7 @@ import type { DemandaDetalhe } from '@/types/request';
 import { StatusActions } from '@/components/StatusActions';
 import { HistoricoStatus } from '@/components/HistoricoStatus';
 import { ReatribuirDemanda } from '@/components/ReatribuirDemanda';
+import { ObservacoesInternas } from '@/components/ObservacoesInternas';
 
 export default function DemandaDetalhePage() {
   const params = useParams<{ id: string }>();
@@ -125,6 +126,8 @@ export default function DemandaDetalhePage() {
         <p className="text-xs font-medium text-gray-600">Histórico</p>
         <HistoricoStatus demandaId={demanda.id} versao={versaoHistorico} />
       </div>
+
+      {podeMudarStatus && <ObservacoesInternas demandaId={demanda.id} />}
     </div>
   );
 }
