@@ -55,12 +55,14 @@ async function criarDemandaViaApi(tipoId: string, accessToken: string) {
   return res.body.data as { id: string };
 }
 
+const ID_INEXISTENTE = '00000000-0000-0000-0000-000000000000';
+
 describe('POST /demandas/:id/observacoes', () => {
-  it('gabinete cria uma observação', async () => {
+  it('gabinete cria uma observação, com autorId sempre derivado do usuário autenticado', async () => {
     const tipo = await criarTipo();
     const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999997001');
     const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
-    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997002');
+    const { assessor: gabinete, accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997002');
 
     const res = await request(app)
       .post(`/demandas/${demanda.id}/observacoes`)
@@ -70,6 +72,34 @@ describe('POST /demandas/:id/observacoes', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.texto).toBe('Liguei pra prefeitura');
     expect(res.body.data.updatedAt).toBeNull();
+    expect(res.body.data.autorId).toBe(gabinete.id);
+  }, 30000); // Neon real via rede.
+
+  it('ignora um autorId enviado no corpo e usa o id do usuário autenticado', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999997019');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { assessor: gabinete, accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997020');
+
+    const res = await request(app)
+      .post(`/demandas/${demanda.id}/observacoes`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ texto: 'x', autorId: ID_INEXISTENTE });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.autorId).toBe(gabinete.id);
+    expect(res.body.data.autorId).not.toBe(ID_INEXISTENTE);
+  }, 30000); // Neon real via rede.
+
+  it('retorna 404 para demanda inexistente', async () => {
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997021');
+
+    const res = await request(app)
+      .post(`/demandas/${ID_INEXISTENTE}/observacoes`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ texto: 'Tentativa' });
+
+    expect(res.status).toBe(404);
   }, 30000); // Neon real via rede.
 
   it('bloqueia assessor de rua com 403', async () => {
@@ -160,6 +190,46 @@ describe('PATCH /demandas/:id/observacoes/:notaId', () => {
 
     expect(res.status).toBe(403);
   }, 30000); // Neon real via rede.
+
+  it('bloqueia assessor de rua com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999997022');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997023');
+    const criada = await request(app).post(`/demandas/${demanda.id}/observacoes`).set('Authorization', `Bearer ${tokenGabinete}`).send({ texto: 'Original' });
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/observacoes/${criada.body.data.id}`)
+      .set('Authorization', `Bearer ${tokenRua}`)
+      .send({ texto: 'Tentativa' });
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('retorna 404 para demanda inexistente', async () => {
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997024');
+
+    const res = await request(app)
+      .patch(`/demandas/${ID_INEXISTENTE}/observacoes/${ID_INEXISTENTE}`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ texto: 'Tentativa' });
+
+    expect(res.status).toBe(404);
+  }, 30000); // Neon real via rede.
+
+  it('retorna 404 para nota inexistente', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999997025');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997026');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/observacoes/${ID_INEXISTENTE}`)
+      .set('Authorization', `Bearer ${tokenGabinete}`)
+      .send({ texto: 'Tentativa' });
+
+    expect(res.status).toBe(404);
+  }, 30000); // Neon real via rede.
 });
 
 describe('DELETE /demandas/:id/observacoes/:notaId', () => {
@@ -192,5 +262,34 @@ describe('DELETE /demandas/:id/observacoes/:notaId', () => {
       .set('Authorization', `Bearer ${tokenGabineteB}`);
 
     expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('bloqueia assessor de rua com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999997027');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997028');
+    const criada = await request(app).post(`/demandas/${demanda.id}/observacoes`).set('Authorization', `Bearer ${tokenGabinete}`).send({ texto: 'Nota' });
+
+    const res = await request(app)
+      .delete(`/demandas/${demanda.id}/observacoes/${criada.body.data.id}`)
+      .set('Authorization', `Bearer ${tokenRua}`);
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('retorna 404 quando a nota existe mas pertence a outra demanda (escopo cruzado)', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999997029');
+    const demandaA = await criarDemandaViaApi(tipo.id, tokenRua);
+    const demandaB = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999997030');
+    const criada = await request(app).post(`/demandas/${demandaA.id}/observacoes`).set('Authorization', `Bearer ${tokenGabinete}`).send({ texto: 'Nota da A' });
+
+    const res = await request(app)
+      .delete(`/demandas/${demandaB.id}/observacoes/${criada.body.data.id}`)
+      .set('Authorization', `Bearer ${tokenGabinete}`);
+
+    expect(res.status).toBe(404);
   }, 30000); // Neon real via rede.
 });
