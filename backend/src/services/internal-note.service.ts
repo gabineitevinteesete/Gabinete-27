@@ -1,5 +1,10 @@
+import { Prisma } from '@prisma/client';
 import type { InternalNoteRepository, InternalNoteItem } from '../repositories/internal-note.repository.js';
 import type { RequestRepository } from '../repositories/request.repository.js';
+
+function isRegistroNaoEncontrado(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025';
+}
 
 export type CriarObservacaoResultado =
   | { status: 'ok'; observacao: InternalNoteItem }
@@ -46,15 +51,28 @@ export class InternalNoteService {
     const nota = await this.internalNoteRepo.findById(notaId);
     if (!nota || nota.requestId !== requestId) return { status: 'nao_encontrada' };
     if (nota.autorId !== usuarioId) return { status: 'sem_permissao' };
-    const observacao = await this.internalNoteRepo.update(notaId, texto);
-    return { status: 'ok', observacao };
+    try {
+      const observacao = await this.internalNoteRepo.update(notaId, texto);
+      return { status: 'ok', observacao };
+    } catch (error) {
+      // Corrida entre duas abas/requisições: a nota foi apagada entre o findById acima e
+      // o update abaixo. Trata como "não encontrada" em vez de deixar o 500 genérico subir.
+      if (isRegistroNaoEncontrado(error)) return { status: 'nao_encontrada' };
+      throw error;
+    }
   }
 
   async apagar(requestId: string, notaId: string, usuarioId: string): Promise<ApagarObservacaoResultado> {
     const nota = await this.internalNoteRepo.findById(notaId);
     if (!nota || nota.requestId !== requestId) return { status: 'nao_encontrada' };
     if (nota.autorId !== usuarioId) return { status: 'sem_permissao' };
-    await this.internalNoteRepo.delete(notaId);
-    return { status: 'ok' };
+    try {
+      await this.internalNoteRepo.delete(notaId);
+      return { status: 'ok' };
+    } catch (error) {
+      // Mesma corrida do editar: outra requisição já apagou a nota entre o findById e o delete.
+      if (isRegistroNaoEncontrado(error)) return { status: 'nao_encontrada' };
+      throw error;
+    }
   }
 }
