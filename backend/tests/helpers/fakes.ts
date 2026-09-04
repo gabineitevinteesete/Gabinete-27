@@ -15,6 +15,7 @@ import type {
 } from '../../src/repositories/request.repository.js';
 import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../../src/utils/request-status.js';
 import { randomUUID } from 'node:crypto';
+import type { InternalNoteRepository, InternalNoteItem } from '../../src/repositories/internal-note.repository.js';
 
 type StoredUser = PublicUser & { pinHash: string | null };
 
@@ -312,6 +313,46 @@ export function createFakeRequestRepo(): RequestRepository & {
       });
       existente.assessorResponsavelId = novoAssessorId;
       return existente;
+    },
+  };
+}
+
+export function createFakeInternalNoteRepo(): InternalNoteRepository & { store: InternalNoteItem[] } {
+  const store: InternalNoteItem[] = [];
+  let contador = 0;
+
+  return {
+    store,
+    async create(requestId, autorId, texto) {
+      contador += 1;
+      const item: InternalNoteItem = {
+        id: `fake-nota-${contador}`,
+        requestId,
+        autorId,
+        autorNome: 'Autor Fake',
+        texto,
+        createdAt: new Date(),
+        updatedAt: null,
+      };
+      store.push(item);
+      return item;
+    },
+    async list(requestId) {
+      return store.filter((n) => n.requestId === requestId).slice().reverse();
+    },
+    async findById(id) {
+      return store.find((n) => n.id === id) ?? null;
+    },
+    async update(id, texto) {
+      const existente = store.find((n) => n.id === id);
+      if (!existente) throw new Error('Observação não encontrada (fake)');
+      existente.texto = texto;
+      existente.updatedAt = new Date();
+      return existente;
+    },
+    async delete(id) {
+      const indice = store.findIndex((n) => n.id === id);
+      if (indice !== -1) store.splice(indice, 1);
     },
   };
 }

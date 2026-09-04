@@ -19,6 +19,10 @@ beforeEach(async () => {
   // (Task 3 adicionou linhas nessas tabelas) — precisam ser limpas antes de request.deleteMany().
   await prisma.requestStatusHistory.deleteMany();
   await prisma.requestReassignmentHistory.deleteMany();
+  // internalNote também referencia request com FK RESTRICT — precisa ser limpa antes de
+  // request.deleteMany() (o arquivo internal-note.routes.test.ts pode deixar notas para
+  // trás quando os testes são rodados em conjunto/fora de ordem).
+  await prisma.internalNote.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
   // refreshToken precisa ser limpo antes de user por causa da FK RESTRICT — outros
