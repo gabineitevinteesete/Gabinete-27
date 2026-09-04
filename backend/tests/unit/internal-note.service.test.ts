@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { InternalNoteService } from '../../src/services/internal-note.service.js';
 import { createFakeInternalNoteRepo, createFakeRequestRepo, createFakeRequestTypeRepo, createFakePhotoUploader, createFakeUserRepo } from '../helpers/fakes.js';
+
+function erroRegistroNaoEncontrado(): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Record to update not found.', {
+    code: 'P2025',
+    clientVersion: 'test',
+  });
+}
 
 function buildService() {
   const internalNoteRepo = createFakeInternalNoteRepo();
@@ -113,6 +121,20 @@ describe('InternalNoteService.editar', () => {
 
     expect(resultado.status).toBe('nao_encontrada');
   });
+
+  it('retorna nao_encontrada quando a nota é apagada por outra requisição entre a busca e o update (corrida)', async () => {
+    const { service, requestRepo, internalNoteRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo);
+    const criada = await service.criar(demanda.id, 'gabinete-1', 'Original');
+    const notaId = criada.status === 'ok' ? criada.observacao.id : '';
+    internalNoteRepo.update = async () => {
+      throw erroRegistroNaoEncontrado();
+    };
+
+    const resultado = await service.editar(demanda.id, notaId, 'Tentativa', 'gabinete-1');
+
+    expect(resultado.status).toBe('nao_encontrada');
+  });
 });
 
 describe('InternalNoteService.apagar', () => {
@@ -137,5 +159,19 @@ describe('InternalNoteService.apagar', () => {
     const resultado = await service.apagar(demanda.id, notaId, 'gabinete-2');
 
     expect(resultado.status).toBe('sem_permissao');
+  });
+
+  it('retorna nao_encontrada quando a nota é apagada por outra requisição entre a busca e o delete (corrida)', async () => {
+    const { service, requestRepo, internalNoteRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo);
+    const criada = await service.criar(demanda.id, 'gabinete-1', 'Nota a apagar');
+    const notaId = criada.status === 'ok' ? criada.observacao.id : '';
+    internalNoteRepo.delete = async () => {
+      throw erroRegistroNaoEncontrado();
+    };
+
+    const resultado = await service.apagar(demanda.id, notaId, 'gabinete-1');
+
+    expect(resultado.status).toBe('nao_encontrada');
   });
 });
