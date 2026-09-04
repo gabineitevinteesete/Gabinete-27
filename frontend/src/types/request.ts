@@ -58,3 +58,13 @@ export interface HistoricoStatusItem {
   observacao: string | null;
   createdAt: string;
 }
+
+export interface ObservacaoInterna {
+  id: string;
+  requestId: string;
+  autorId: string;
+  autorNome: string;
+  texto: string;
+  createdAt: string;
+  updatedAt: string | null;
+}

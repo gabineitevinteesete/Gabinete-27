@@ -46,6 +46,9 @@ vi.mock('@/components/HistoricoStatus', () => ({
 vi.mock('@/components/ReatribuirDemanda', () => ({
   ReatribuirDemanda: () => <div>Reatribuir demanda</div>,
 }));
+vi.mock('@/components/ObservacoesInternas', () => ({
+  ObservacoesInternas: () => <div>Observações internas</div>,
+}));
 
 function demandaFake(overrides: Record<string, unknown> = {}) {
   return {
@@ -169,5 +172,24 @@ describe('DemandaDetalhePage', () => {
     // A resposta do PATCH é mesclada inteira, então campos como o nome do responsável
     // acompanham a mudança em vez de ficarem congelados no valor antigo.
     expect(screen.getByText('Assessor Novo')).toBeInTheDocument();
+  });
+
+  it('mostra observações internas para gabinete', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+
+    expect(await screen.findByText('Observações internas')).toBeInTheDocument();
+  });
+
+  it('não mostra observações internas para assessor de rua', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-dono', role: 'ASSESSOR_RUA' } });
+    vi.mocked(apiClient.request).mockResolvedValueOnce(demandaFake());
+
+    render(<DemandaDetalhePage />);
+    await screen.findByText('Buraco na rua');
+
+    expect(screen.queryByText('Observações internas')).not.toBeInTheDocument();
   });
 });

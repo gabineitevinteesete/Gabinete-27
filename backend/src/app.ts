@@ -20,6 +20,8 @@ import { UserService } from './services/user.service.js';
 import { createAuthRouter } from './routes/auth.routes.js';
 import { createUserRouter } from './routes/user.routes.js';
 import { createRequestTypeRouter } from './routes/request-type.routes.js';
+import { createInternalNoteRepository } from './repositories/internal-note.repository.js';
+import { InternalNoteService } from './services/internal-note.service.js';
 
 export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUploader }): express.Express {
   const env = loadEnv();
@@ -46,6 +48,9 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
     });
   const requestService = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
 
+  const internalNoteRepo = createInternalNoteRepository(prisma);
+  const internalNoteService = new InternalNoteService({ internalNoteRepo, requestRepo });
+
   const authService = new AuthService({ userRepo, refreshTokenRepo, loginAttemptRepo, auditLogRepo });
   const userService = new UserService({ userRepo, auditLogRepo });
 
@@ -56,7 +61,7 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
   app.use('/auth', createAuthRouter({ authService, userRepo }));
   app.use('/usuarios', createUserRouter({ userService, userRepo }));
   app.use('/tipos-demanda', createRequestTypeRouter({ requestTypeRepo, userRepo }));
-  app.use('/demandas', createRequestRouter({ requestService, userRepo }));
+  app.use('/demandas', createRequestRouter({ requestService, userRepo, internalNoteService }));
 
   app.use(errorHandler);
 
