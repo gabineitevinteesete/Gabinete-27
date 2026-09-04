@@ -22,7 +22,11 @@ beforeEach(async () => {
   // requestPhoto/request/requestType precisam ser limpos antes de refreshToken/user por
   // causa das FKs RESTRICT em requests (assessorResponsavelId, requestTypeId) — desde que
   // o repositório de demandas passou a popular essas tabelas nos testes de integração.
+  // internalNote também referencia request com FK RESTRICT — precisa ser limpa antes de
+  // request.deleteMany() (o arquivo internal-note.routes.test.ts pode deixar notas para
+  // trás quando os testes são rodados em conjunto/fora de ordem).
   await prisma.requestPhoto.deleteMany();
+  await prisma.internalNote.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
   await prisma.refreshToken.deleteMany();
