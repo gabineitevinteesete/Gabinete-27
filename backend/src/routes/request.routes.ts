@@ -6,6 +6,8 @@ import type { UserRepository } from '../repositories/user.repository.js';
 import { createRequestController } from '../controllers/request.controller.js';
 import { authenticate } from '../middlewares/authenticate.js';
 import { requireRole } from '../middlewares/require-role.js';
+import type { InternalNoteService } from '../services/internal-note.service.js';
+import { createInternalNoteController } from '../controllers/internal-note.controller.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -28,9 +30,14 @@ function asyncHandler(fn: (req: any, res: any) => Promise<void>) {
   return (req: any, res: any, next: any) => fn(req, res).catch(next);
 }
 
-export function createRequestRouter(deps: { requestService: RequestService; userRepo: UserRepository }): Router {
+export function createRequestRouter(deps: {
+  requestService: RequestService;
+  userRepo: UserRepository;
+  internalNoteService: InternalNoteService;
+}): Router {
   const router = Router();
   const controller = createRequestController(deps.requestService);
+  const internalNoteController = createInternalNoteController(deps.internalNoteService);
   const auth = authenticate({ userRepo: deps.userRepo });
 
   router.use(demandasLimiter);
@@ -42,6 +49,12 @@ export function createRequestRouter(deps: { requestService: RequestService; user
   router.patch('/:id/status', auth, requireRole('ASSESSOR_GABINETE', 'CHEFE'), asyncHandler(controller.mudarStatus));
   router.get('/:id/historico-status', auth, asyncHandler(controller.historicoStatus));
   router.patch('/:id/reatribuir', auth, requireRole('CHEFE'), asyncHandler(controller.reatribuir));
+
+  const soGabineteOuChefe = requireRole('ASSESSOR_GABINETE', 'CHEFE');
+  router.post('/:id/observacoes', auth, soGabineteOuChefe, asyncHandler(internalNoteController.criar));
+  router.get('/:id/observacoes', auth, soGabineteOuChefe, asyncHandler(internalNoteController.listar));
+  router.patch('/:id/observacoes/:notaId', auth, soGabineteOuChefe, asyncHandler(internalNoteController.editar));
+  router.delete('/:id/observacoes/:notaId', auth, soGabineteOuChefe, asyncHandler(internalNoteController.apagar));
 
   return router;
 }
