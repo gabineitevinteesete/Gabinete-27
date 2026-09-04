@@ -10,17 +10,38 @@ export function ObservacoesInternas({ demandaId }: { demandaId: string }) {
   const [observacoes, setObservacoes] = useState<ObservacaoInterna[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [erroCarregamento, setErroCarregamento] = useState(false);
   const [textoNovo, setTextoNovo] = useState('');
   const [enviandoNova, setEnviandoNova] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [textoEdicao, setTextoEdicao] = useState('');
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [apagandoId, setApagandoId] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelado = false;
+    setCarregando(true);
+    setErro(null);
+    setErroCarregamento(false);
     apiClient
       .request<ObservacaoInterna[]>(`/demandas/${demandaId}/observacoes`, { auth: true })
-      .then(setObservacoes)
-      .catch(() => setErro('Não foi possível carregar as observações.'))
-      .finally(() => setCarregando(false));
+      .then((lista) => {
+        if (!cancelado) setObservacoes(lista);
+      })
+      // Falha de rede/permissão não pode virar "nenhuma observação ainda": são coisas
+      // diferentes para quem lê a tela.
+      .catch(() => {
+        if (!cancelado) {
+          setErro('Não foi possível carregar as observações.');
+          setErroCarregamento(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCarregando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
   }, [demandaId]);
 
   async function enviarNova() {
@@ -49,8 +70,9 @@ export function ObservacoesInternas({ demandaId }: { demandaId: string }) {
   }
 
   async function salvarEdicao(notaId: string) {
-    if (!textoEdicao.trim()) return;
+    if (!textoEdicao.trim() || salvandoEdicao) return;
     setErro(null);
+    setSalvandoEdicao(true);
     try {
       const atualizada = await apiClient.request<ObservacaoInterna>(`/demandas/${demandaId}/observacoes/${notaId}`, {
         method: 'PATCH',
@@ -61,21 +83,31 @@ export function ObservacoesInternas({ demandaId }: { demandaId: string }) {
       setEditandoId(null);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível salvar a edição.');
+    } finally {
+      setSalvandoEdicao(false);
     }
   }
 
   async function apagar(notaId: string) {
+    if (apagandoId === notaId) return;
     if (!window.confirm('Apagar esta observação?')) return;
     setErro(null);
+    setApagandoId(notaId);
     try {
       await apiClient.request(`/demandas/${demandaId}/observacoes/${notaId}`, { method: 'DELETE', auth: true });
       setObservacoes((prev) => prev.filter((nota) => nota.id !== notaId));
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível apagar a observação.');
+    } finally {
+      setApagandoId(null);
     }
   }
 
   if (carregando) return <p className="text-sm text-gray-500">Carregando observações…</p>;
+
+  if (erroCarregamento) {
+    return <p className="text-sm text-red-600">{erro}</p>;
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -98,7 +130,7 @@ export function ObservacoesInternas({ demandaId }: { demandaId: string }) {
                   <button
                     type="button"
                     onClick={() => salvarEdicao(nota.id)}
-                    disabled={!textoEdicao.trim()}
+                    disabled={!textoEdicao.trim() || salvandoEdicao}
                     className="rounded-xl bg-secondary px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Salvar
@@ -117,14 +149,19 @@ export function ObservacoesInternas({ demandaId }: { demandaId: string }) {
                 <p className="text-gray-900">{nota.texto}</p>
                 <p className="mt-1 text-xs text-gray-500">
                   {nota.autorNome} — {new Date(nota.createdAt).toLocaleString('pt-BR')}
-                  {nota.updatedAt && ' (editado)'}
+                  {nota.updatedAt && ` (editado em ${new Date(nota.updatedAt).toLocaleString('pt-BR')})`}
                 </p>
                 {nota.autorId === user?.id && (
                   <div className="mt-2 flex gap-3">
                     <button type="button" onClick={() => iniciarEdicao(nota)} className="text-xs font-medium text-primary">
                       Editar
                     </button>
-                    <button type="button" onClick={() => apagar(nota.id)} className="text-xs font-medium text-red-600">
+                    <button
+                      type="button"
+                      onClick={() => apagar(nota.id)}
+                      disabled={apagandoId === nota.id}
+                      className="text-xs font-medium text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       Apagar
                     </button>
                   </div>

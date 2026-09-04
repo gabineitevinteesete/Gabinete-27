@@ -38,6 +38,14 @@ describe('ObservacoesInternas', () => {
     expect(await screen.findByText(/nenhuma observação/i)).toBeInTheDocument();
   });
 
+  it('mostra erro de carregamento em vez de "nenhuma observação" quando a busca falha', async () => {
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new Error('falha de rede'));
+    render(<ObservacoesInternas demandaId="d1" />);
+
+    expect(await screen.findByText(/não foi possível carregar as observações/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nenhuma observação/i)).not.toBeInTheDocument();
+  });
+
   it('cria uma nova observação e mostra na lista', async () => {
     vi.mocked(apiClient.request).mockResolvedValueOnce([]);
     vi.mocked(apiClient.request).mockResolvedValueOnce(notaFake());
