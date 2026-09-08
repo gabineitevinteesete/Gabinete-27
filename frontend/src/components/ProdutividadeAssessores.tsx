@@ -25,7 +25,10 @@ export function ProdutividadeAssessores() {
     setCarregando(true);
     setErro(false);
     apiClient
-      .request<ProdutividadeAssessor[]>(`/dashboard/produtividade-assessores?mes=${mes}`, { auth: true })
+      .request<ProdutividadeAssessor[]>(
+        mes ? `/dashboard/produtividade-assessores?mes=${mes}` : '/dashboard/produtividade-assessores',
+        { auth: true },
+      )
       .then(setDados)
       .catch(() => setErro(true))
       .finally(() => setCarregando(false));
