@@ -68,3 +68,42 @@ export interface ObservacaoInterna {
   createdAt: string;
   updatedAt: string | null;
 }
+
+export interface ContagemStatus {
+  status: RequestStatusValue;
+  quantidade: number;
+}
+
+export interface ContagemBairro {
+  bairro: string;
+  quantidade: number;
+}
+
+export interface ContagemAssessor {
+  assessorId: string;
+  assessorNome: string;
+  quantidade: number;
+}
+
+export interface DemandaParada {
+  id: string;
+  codigoInterno: string;
+  tituloResumido: string;
+  assessorResponsavelNome: string;
+  status: RequestStatusValue;
+  diasParada: number;
+}
+
+export interface ResumoDashboard {
+  porStatus: ContagemStatus[];
+  porBairro: ContagemBairro[];
+  porAssessor: ContagemAssessor[];
+  paradas: DemandaParada[];
+}
+
+export interface ProdutividadeAssessor {
+  assessorId: string;
+  assessorNome: string;
+  porStatus: Record<RequestStatusValue, number>;
+  total: number;
+}
