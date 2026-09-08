@@ -149,3 +149,70 @@ describe('DashboardRepository.resumo — demandas paradas', () => {
     expect(resumo.paradas.find((p) => p.codigoInterno === 'GD-dash-8')).toBeUndefined();
   }, 20000);
 });
+
+describe('DashboardRepository.produtividadeAssessores', () => {
+  it('conta por status as demandas que cada assessor de rua criou no período, mesmo reatribuídas', async () => {
+    const rua2 = await prisma.user.create({
+      data: { nome: 'Rua Dois', telefone: '+5534999995300', role: 'ASSESSOR_RUA' },
+    });
+    const gabinete = await prisma.user.create({
+      data: { nome: 'Gabinete Um', telefone: '+5534999995301', role: 'ASSESSOR_GABINETE' },
+    });
+
+    const d1 = await requestRepo.create(inputBase({ codigoInterno: 'GD-prod-1' }), [fotoBase]);
+    await requestRepo.updateStatus(d1.id, 'RECEBIDA', assessorId);
+    await requestRepo.reatribuir(d1.id, gabinete.id, gabinete.id); // criadoPorId continua sendo assessorId
+    await requestRepo.create(inputBase({ codigoInterno: 'GD-prod-2', assessorResponsavelId: rua2.id, criadoPorId: rua2.id }), [fotoBase]);
+
+    const inicio = new Date();
+    inicio.setDate(1);
+    inicio.setHours(0, 0, 0, 0);
+    const fim = new Date(inicio);
+    fim.setMonth(fim.getMonth() + 1);
+
+    const resultado = await dashboardRepo.produtividadeAssessores(inicio, fim);
+
+    const linhaAssessor = resultado.find((r) => r.assessorId === assessorId);
+    expect(linhaAssessor?.total).toBe(1);
+    expect(linhaAssessor?.porStatus.RECEBIDA).toBe(1);
+    const linhaRua2 = resultado.find((r) => r.assessorId === rua2.id);
+    expect(linhaRua2?.total).toBe(1);
+    expect(resultado.find((r) => r.assessorId === gabinete.id)).toBeUndefined();
+  }, 30000);
+
+  it('inclui assessores de rua ativos sem nenhuma demanda no período, com zero em tudo', async () => {
+    const semDemandas = await prisma.user.create({
+      data: { nome: 'Rua Sem Demandas', telefone: '+5534999995302', role: 'ASSESSOR_RUA' },
+    });
+
+    const inicio = new Date();
+    inicio.setDate(1);
+    inicio.setHours(0, 0, 0, 0);
+    const fim = new Date(inicio);
+    fim.setMonth(fim.getMonth() + 1);
+
+    const resultado = await dashboardRepo.produtividadeAssessores(inicio, fim);
+
+    const linha = resultado.find((r) => r.assessorId === semDemandas.id);
+    expect(linha?.total).toBe(0);
+  }, 20000);
+
+  it('não conta demandas criadas fora do período', async () => {
+    const d1 = await requestRepo.create(inputBase({ codigoInterno: 'GD-prod-3' }), [fotoBase]);
+    await prisma.request.update({
+      where: { id: d1.id },
+      data: { createdAt: new Date('2020-01-01') },
+    });
+
+    const inicio = new Date();
+    inicio.setDate(1);
+    inicio.setHours(0, 0, 0, 0);
+    const fim = new Date(inicio);
+    fim.setMonth(fim.getMonth() + 1);
+
+    const resultado = await dashboardRepo.produtividadeAssessores(inicio, fim);
+
+    const linha = resultado.find((r) => r.assessorId === assessorId);
+    expect(linha?.total).toBe(0);
+  }, 20000);
+});
