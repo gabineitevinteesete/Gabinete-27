@@ -25,7 +25,7 @@ export interface UserRepository {
   clearPin(id: string): Promise<void>;
   updateRole(id: string, role: UserRoleValue): Promise<PublicUser>;
   setAtivo(id: string, ativo: boolean): Promise<PublicUser>;
-  list(filter?: { ativo?: boolean }): Promise<PublicUser[]>;
+  list(filter?: { ativo?: boolean; role?: UserRoleValue }): Promise<PublicUser[]>;
 }
 
 export function createUserRepository(prisma: PrismaClient): UserRepository {
@@ -60,7 +60,10 @@ export function createUserRepository(prisma: PrismaClient): UserRepository {
     },
     async list(filter) {
       const users = await prisma.user.findMany({
-        where: filter?.ativo === undefined ? {} : { ativo: filter.ativo },
+        where: {
+          ...(filter?.ativo === undefined ? {} : { ativo: filter.ativo }),
+          ...(filter?.role === undefined ? {} : { role: filter.role }),
+        },
         orderBy: { nome: 'asc' },
       });
       return users.map(toPublicUser);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { apiClient } from '@/services/api-client';
 import type { DemandaResumo } from '@/types/request';
 import { STATUS_LABEL } from '@/lib/request-status';
@@ -16,12 +17,18 @@ interface ListaDemandasResposta {
 }
 
 export default function DemandasPage() {
+  const searchParams = useSearchParams();
+  const assessorResponsavelIdInicial = searchParams.get('assessorResponsavelId') ?? '';
+  const bairroInicial = searchParams.get('bairro') ?? '';
+  const statusInicial = searchParams.get('status') ?? '';
+
   const [itens, setItens] = useState<DemandaResumo[]>([]);
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
-  const [bairro, setBairro] = useState('');
-  const [bairroBuscado, setBairroBuscado] = useState('');
-  const [status, setStatus] = useState('');
+  const [bairro, setBairro] = useState(bairroInicial);
+  const [bairroBuscado, setBairroBuscado] = useState(bairroInicial);
+  const [status, setStatus] = useState(statusInicial);
+  const [assessorResponsavelId] = useState(assessorResponsavelIdInicial);
   const [carregando, setCarregando] = useState(true);
   const tamanhoPagina = 20;
 
@@ -36,6 +43,7 @@ export default function DemandasPage() {
     const params = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: String(tamanhoPagina) });
     if (bairroBuscado) params.set('bairro', bairroBuscado);
     if (status) params.set('status', status);
+    if (assessorResponsavelId) params.set('assessorResponsavelId', assessorResponsavelId);
 
     apiClient
       .request<ListaDemandasResposta>(`/demandas?${params.toString()}`, { auth: true })
@@ -48,7 +56,7 @@ export default function DemandasPage() {
         setTotal(0);
       })
       .finally(() => setCarregando(false));
-  }, [pagina, bairroBuscado, status]);
+  }, [pagina, bairroBuscado, status, assessorResponsavelId]);
 
   const totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
 
