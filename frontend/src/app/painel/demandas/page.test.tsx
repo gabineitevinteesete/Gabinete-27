@@ -109,4 +109,34 @@ describe('DemandasPage', () => {
 
     window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
   });
+
+  it('lê status da URL de entrada e aplica no primeiro fetch', async () => {
+    const paramsOriginais = window.location.search;
+    window.history.replaceState({}, '', '/painel/demandas?status=RECEBIDA');
+
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+    const [url] = vi.mocked(apiClient.request).mock.calls[0]!;
+    expect(url).toContain('status=RECEBIDA');
+
+    window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
+  });
+
+  it('lê bairro da URL de entrada e aplica no primeiro fetch', async () => {
+    const paramsOriginais = window.location.search;
+    window.history.replaceState({}, '', '/painel/demandas?bairro=Centro');
+
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+    const [url] = vi.mocked(apiClient.request).mock.calls[0]!;
+    expect(url).toContain('bairro=Centro');
+
+    window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
+  });
 });
