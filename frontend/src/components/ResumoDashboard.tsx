@@ -89,13 +89,18 @@ export function ResumoDashboard() {
         {dados.paradas.length === 0 && <p className="text-sm text-gray-500">Nenhuma demanda parada.</p>}
         <ul className="flex flex-col gap-2">
           {dados.paradas.map((item) => (
-            <li key={item.id} className="rounded-xl border border-gray-200 p-2 text-sm hover:bg-gray-50">
-              <Link href={`/painel/demandas/${item.id}`} className="block font-medium text-gray-900 hover:underline">
-                {item.codigoInterno} — {item.tituloResumido}
+            <li key={item.id}>
+              <Link
+                href={`/painel/demandas/${item.id}`}
+                className="block rounded-xl border border-gray-200 p-2 text-sm hover:bg-gray-50"
+              >
+                <p className="font-medium text-gray-900">
+                  {item.codigoInterno} — {item.tituloResumido}
+                </p>
+                <p className="text-xs text-gray-600">
+                  {item.assessorResponsavelNome} — {STATUS_LABEL[item.status]} — {item.diasParada} dias parada
+                </p>
               </Link>
-              <p className="text-xs text-gray-600">
-                {item.assessorResponsavelNome} — {STATUS_LABEL[item.status]} — {item.diasParada} dias parada
-              </p>
             </li>
           ))}
         </ul>

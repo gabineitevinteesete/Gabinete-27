@@ -47,7 +47,19 @@ describe('ResumoDashboard', () => {
     await screen.findByText('Centro');
 
     expect(screen.getByRole('link', { name: /Centro/ })).toHaveAttribute('href', '/painel/demandas?bairro=Centro');
-    expect(screen.getByRole('link', { name: /Ana/ })).toHaveAttribute('href', '/painel/demandas?assessorResponsavelId=a1');
+    // Nome exato ("Ana") evita colisão com o card de demanda parada, cujo link
+    // também contém "Ana" (nome do assessor) mas com nome acessível mais longo.
+    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/painel/demandas?assessorResponsavelId=a1');
+  });
+
+  it('o card de demanda parada é inteiramente clicável e aponta para o detalhe', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce(resumoFake);
+
+    render(<ResumoDashboard />);
+    await screen.findByText(/GD-1/);
+
+    const linkParada = screen.getByRole('link', { name: /GD-1.*Buraco.*Ana.*3 dias parada/ });
+    expect(linkParada).toHaveAttribute('href', '/painel/demandas/d1');
   });
 
   it('mostra mensagem quando não há demandas paradas', async () => {
