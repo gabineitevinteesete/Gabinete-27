@@ -20,6 +20,7 @@ export interface CriarRequestInput {
   descricaoOutroAssunto?: string;
   requestTypeId: string;
   assessorResponsavelId: string;
+  criadoPorId: string;
   autorizacaoDados: boolean;
 }
 
@@ -39,6 +40,7 @@ export interface RequestSummary {
   bairro: string | null;
   status: RequestStatusValue;
   assessorResponsavelId: string;
+  criadoPorId: string;
   assessorResponsavelNome: string;
   requestTypeId: string;
   requestTypeNome: string;
@@ -136,6 +138,7 @@ function toDetail(row: RequestComRelacoes): RequestDetail {
     bairro: row.bairro,
     status: row.status as RequestStatusValue,
     assessorResponsavelId: row.assessorResponsavelId,
+    criadoPorId: row.criadoPorId,
     assessorResponsavelNome: row.assessorResponsavel.nome,
     requestTypeId: row.requestTypeId,
     requestTypeNome: row.requestType.nome,
@@ -182,6 +185,7 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
           descricaoOutroAssunto: input.descricaoOutroAssunto,
           requestTypeId: input.requestTypeId,
           assessorResponsavelId: input.assessorResponsavelId,
+          criadoPorId: input.criadoPorId,
           autorizacaoDados: input.autorizacaoDados,
           status: 'ENVIADA',
           fotos: {
