@@ -215,6 +215,7 @@ export function createFakeRequestRepo(): RequestRepository & {
         bairro: input.bairro ?? null,
         status: 'ENVIADA',
         assessorResponsavelId: input.assessorResponsavelId,
+        criadoPorId: input.criadoPorId,
         assessorResponsavelNome: 'Assessor Fake',
         requestTypeId: input.requestTypeId,
         requestTypeNome: 'Tipo Fake',

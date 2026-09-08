@@ -27,6 +27,7 @@ async function criarDemandaFake(requestRepo: ReturnType<typeof createFakeRequest
       descricao: 'Descrição',
       requestTypeId: 'tipo-1',
       assessorResponsavelId: 'gabinete-1',
+      criadoPorId: 'gabinete-1',
       autorizacaoDados: true,
     },
     [{ url: 'https://cdn/a.jpg', publicId: 'a', larguraPx: 10, alturaPx: 10, bytes: 100 }],

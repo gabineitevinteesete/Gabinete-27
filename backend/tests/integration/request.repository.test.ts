@@ -55,6 +55,7 @@ function inputBase(overrides: Partial<CriarRequestInput> = {}): CriarRequestInpu
     descricao: 'Buraco grande em frente ao número 100',
     requestTypeId: tipoId,
     assessorResponsavelId: assessorId,
+    criadoPorId: assessorId,
     autorizacaoDados: true,
     bairro: 'Centro',
     ...overrides,
@@ -249,4 +250,26 @@ describe('RequestRepository.reatribuir', () => {
     expect(historico[0]?.assessorNovoId).toBe(novoAssessor.id);
     expect(historico[0]?.reatribuidoPorId).toBe(chefe.id);
   }, 20000);
+});
+
+describe('RequestRepository.create — criadoPorId', () => {
+  it('grava criadoPorId igual a assessorResponsavelId no momento da criação', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-criador-1' }), [fotoBase]);
+
+    const linha = await prisma.request.findUniqueOrThrow({ where: { id: criado.id } });
+    expect(linha.criadoPorId).toBe(assessorId);
+  });
+
+  it('criadoPorId não muda depois de uma reatribuição', async () => {
+    const criado = await requestRepo.create(inputBase({ codigoInterno: 'GD-criador-2' }), [fotoBase]);
+    const novoAssessor = await prisma.user.create({
+      data: { nome: 'Novo Assessor', telefone: '+5534999996500', role: 'ASSESSOR_GABINETE' },
+    });
+
+    await requestRepo.reatribuir(criado.id, novoAssessor.id, novoAssessor.id);
+
+    const linha = await prisma.request.findUniqueOrThrow({ where: { id: criado.id } });
+    expect(linha.criadoPorId).toBe(assessorId);
+    expect(linha.assessorResponsavelId).toBe(novoAssessor.id);
+  });
 });

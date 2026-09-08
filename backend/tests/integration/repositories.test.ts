@@ -26,6 +26,10 @@ beforeEach(async () => {
   // request.deleteMany() (o arquivo internal-note.routes.test.ts pode deixar notas para
   // trás quando os testes são rodados em conjunto/fora de ordem).
   await prisma.requestPhoto.deleteMany();
+  // requestStatusHistory/requestReassignmentHistory referenciam request com FK RESTRICT
+  // — precisam ser limpas antes de request.deleteMany().
+  await prisma.requestStatusHistory.deleteMany();
+  await prisma.requestReassignmentHistory.deleteMany();
   await prisma.internalNote.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
@@ -56,6 +60,30 @@ describe('UserRepository', () => {
 
     const deactivated = await userRepo.setAtivo(created.id, false);
     expect(deactivated.ativo).toBe(false);
+  });
+});
+
+describe('UserRepository.list — filtro por papel', () => {
+  it('filtra só por role quando informado', async () => {
+    await userRepo.create({ nome: 'Rua Um', telefone: '+5534999996600', role: 'ASSESSOR_RUA' });
+    await userRepo.create({ nome: 'Gabinete Um', telefone: '+5534999996601', role: 'ASSESSOR_GABINETE' });
+
+    const resultado = await userRepo.list({ role: 'ASSESSOR_RUA' });
+
+    expect(resultado.every((u) => u.role === 'ASSESSOR_RUA')).toBe(true);
+    expect(resultado.some((u) => u.nome === 'Rua Um')).toBe(true);
+    expect(resultado.some((u) => u.nome === 'Gabinete Um')).toBe(false);
+  });
+
+  it('combina filtro de role com filtro de ativo', async () => {
+    const criado = await userRepo.create({ nome: 'Rua Inativo', telefone: '+5534999996602', role: 'ASSESSOR_RUA' });
+    await userRepo.setAtivo(criado.id, false);
+    await userRepo.create({ nome: 'Rua Ativo', telefone: '+5534999996603', role: 'ASSESSOR_RUA' });
+
+    const resultado = await userRepo.list({ role: 'ASSESSOR_RUA', ativo: true });
+
+    expect(resultado.some((u) => u.nome === 'Rua Ativo')).toBe(true);
+    expect(resultado.some((u) => u.nome === 'Rua Inativo')).toBe(false);
   });
 });
 
