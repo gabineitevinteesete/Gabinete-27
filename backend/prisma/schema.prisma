@@ -128,8 +128,8 @@ model Request {
   requestType            RequestType   @relation(fields: [requestTypeId], references: [id])
   assessorResponsavelId  String
   assessorResponsavel    User          @relation("AssessorResponsavel", fields: [assessorResponsavelId], references: [id])
-  criadoPorId            String?
-  criadoPor              User?         @relation("RequestCriadoPor", fields: [criadoPorId], references: [id])
+  criadoPorId            String
+  criadoPor              User          @relation("RequestCriadoPor", fields: [criadoPorId], references: [id])
   status                 RequestStatus @default(RASCUNHO)
   numeroProtocolo        String?
   autorizacaoDados       Boolean       @default(false)
