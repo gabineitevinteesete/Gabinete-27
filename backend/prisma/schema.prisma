@@ -41,6 +41,7 @@ model User {
   refreshTokens        RefreshToken[]
   auditLogsComoAtor    AuditLog[]              @relation("ActorAuditLogs")
   demandasResponsavel  Request[]               @relation("AssessorResponsavel")
+  demandasCriadas      Request[]               @relation("RequestCriadoPor")
   historicoAlteracoes  RequestStatusHistory[]  @relation("StatusHistoryUser")
   observacoesInternas  InternalNote[]          @relation("InternalNoteAuthor")
   notificacoes         Notification[]
@@ -127,6 +128,8 @@ model Request {
   requestType            RequestType   @relation(fields: [requestTypeId], references: [id])
   assessorResponsavelId  String
   assessorResponsavel    User          @relation("AssessorResponsavel", fields: [assessorResponsavelId], references: [id])
+  criadoPorId            String?
+  criadoPor              User?         @relation("RequestCriadoPor", fields: [criadoPorId], references: [id])
   status                 RequestStatus @default(RASCUNHO)
   numeroProtocolo        String?
   autorizacaoDados       Boolean       @default(false)
