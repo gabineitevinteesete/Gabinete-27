@@ -48,6 +48,7 @@ function inputBase(overrides: Partial<CriarRequestInput> = {}): CriarRequestInpu
     descricao: 'Buraco grande em frente ao número 100',
     requestTypeId: tipoId,
     assessorResponsavelId: assessorId,
+    criadoPorId: assessorId,
     autorizacaoDados: true,
     ...overrides,
   };

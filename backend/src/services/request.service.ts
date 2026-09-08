@@ -199,6 +199,7 @@ export class RequestService {
         descricaoOutroAssunto: input.descricaoOutroAssunto,
         requestTypeId: input.requestTypeId,
         assessorResponsavelId: input.assessorResponsavelId,
+        criadoPorId: input.assessorResponsavelId,
         autorizacaoDados: input.autorizacaoDados,
       },
       fotosEnviadas,
