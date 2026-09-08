@@ -6,6 +6,12 @@ vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
 }));
 
+// Lê window.location.search em tempo de chamada (não um valor fixo), pois os testes
+// mudam a URL via window.history.replaceState antes de renderizar a página.
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
+
 vi.mock('@/services/api-client', async () => {
   const actual = await vi.importActual<typeof import('@/services/api-client')>('@/services/api-client');
   return { ...actual, apiClient: { ...actual.apiClient, request: vi.fn() } };
@@ -87,5 +93,20 @@ describe('DemandasPage', () => {
     await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
     const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
     expect(url).toContain('status=RECEBIDA');
+  });
+
+  it('lê assessorResponsavelId da URL de entrada e aplica no filtro', async () => {
+    const paramsOriginais = window.location.search;
+    window.history.replaceState({}, '', '/painel/demandas?assessorResponsavelId=assessor-123');
+
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+    const [url] = vi.mocked(apiClient.request).mock.calls[0]!;
+    expect(url).toContain('assessorResponsavelId=assessor-123');
+
+    window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
   });
 });
