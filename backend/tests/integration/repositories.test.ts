@@ -26,6 +26,10 @@ beforeEach(async () => {
   // request.deleteMany() (o arquivo internal-note.routes.test.ts pode deixar notas para
   // trás quando os testes são rodados em conjunto/fora de ordem).
   await prisma.requestPhoto.deleteMany();
+  // requestStatusHistory/requestReassignmentHistory referenciam request com FK RESTRICT
+  // — precisam ser limpas antes de request.deleteMany().
+  await prisma.requestStatusHistory.deleteMany();
+  await prisma.requestReassignmentHistory.deleteMany();
   await prisma.internalNote.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
