@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { createDashboardRepository } from '../../src/repositories/dashboard.repository.js';
 import { createRequestRepository, type CriarRequestInput } from '../../src/repositories/request.repository.js';
+import { resetDb } from '../helpers/reset-db.js';
 
 const prisma = new PrismaClient();
 const dashboardRepo = createDashboardRepository(prisma);
@@ -15,14 +16,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await prisma.internalNote.deleteMany();
-  await prisma.requestPhoto.deleteMany();
-  await prisma.requestStatusHistory.deleteMany();
-  await prisma.requestReassignmentHistory.deleteMany();
-  await prisma.request.deleteMany();
-  await prisma.requestType.deleteMany();
-  await prisma.refreshToken.deleteMany();
-  await prisma.user.deleteMany();
+  await resetDb();
 
   const tipo = await prisma.requestType.create({
     data: { nome: 'Tapa-buraco', ativo: true, exigeDescricaoObrigatoria: false },
