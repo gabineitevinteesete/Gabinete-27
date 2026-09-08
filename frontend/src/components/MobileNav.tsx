@@ -12,6 +12,7 @@ interface ItemMenu {
 const ITENS: ItemMenu[] = [
   { href: '/painel', label: 'Painel' },
   { href: '/painel/demandas', label: 'Demandas' },
+  { href: '/painel/dashboard', label: 'Dashboard', somenteChefe: true },
   { href: '/painel/assessores', label: 'Equipe', somenteChefe: true },
 ];
 
