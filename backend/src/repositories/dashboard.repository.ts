@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type { RequestStatusValue } from '../utils/request-status.js';
+import type { UserRoleValue } from '../utils/jwt.js';
 
 const STATUS_FINALIZADOS: readonly RequestStatusValue[] = ['CONCLUIDA', 'ARQUIVADA', 'RECUSADA'];
 const TODOS_STATUS: readonly RequestStatusValue[] = [
@@ -40,8 +41,16 @@ export interface ResumoDashboard {
   paradas: DemandaParada[];
 }
 
+export interface ProdutividadeAssessor {
+  assessorId: string;
+  assessorNome: string;
+  porStatus: Record<RequestStatusValue, number>;
+  total: number;
+}
+
 export interface DashboardRepository {
   resumo(): Promise<ResumoDashboard>;
+  produtividadeAssessores(mesInicio: Date, mesFim: Date): Promise<ProdutividadeAssessor[]>;
 }
 
 export function createDashboardRepository(prisma: PrismaClient): DashboardRepository {
@@ -109,6 +118,38 @@ export function createDashboardRepository(prisma: PrismaClient): DashboardReposi
         })),
         paradas: paradas.sort((a, b) => b.diasParada - a.diasParada),
       };
+    },
+
+    async produtividadeAssessores(mesInicio, mesFim) {
+      const assessoresRua = await prisma.user.findMany({
+        where: { role: 'ASSESSOR_RUA' as UserRoleValue, ativo: true },
+        select: { id: true, nome: true },
+        orderBy: { nome: 'asc' },
+      });
+
+      const contagens = await prisma.request.groupBy({
+        by: ['criadoPorId', 'status'],
+        where: {
+          createdAt: { gte: mesInicio, lt: mesFim },
+          criadoPor: { role: 'ASSESSOR_RUA' as UserRoleValue },
+        },
+        _count: true,
+      });
+
+      return assessoresRua.map((assessor) => {
+        const porStatus = Object.fromEntries(TODOS_STATUS.map((status) => [status, 0])) as Record<
+          RequestStatusValue,
+          number
+        >;
+        let total = 0;
+        for (const linha of contagens) {
+          if (linha.criadoPorId === assessor.id) {
+            porStatus[linha.status as RequestStatusValue] = linha._count;
+            total += linha._count;
+          }
+        }
+        return { assessorId: assessor.id, assessorNome: assessor.nome, porStatus, total };
+      });
     },
   };
 }
