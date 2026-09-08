@@ -59,6 +59,30 @@ describe('UserRepository', () => {
   });
 });
 
+describe('UserRepository.list — filtro por papel', () => {
+  it('filtra só por role quando informado', async () => {
+    await userRepo.create({ nome: 'Rua Um', telefone: '+5534999996600', role: 'ASSESSOR_RUA' });
+    await userRepo.create({ nome: 'Gabinete Um', telefone: '+5534999996601', role: 'ASSESSOR_GABINETE' });
+
+    const resultado = await userRepo.list({ role: 'ASSESSOR_RUA' });
+
+    expect(resultado.every((u) => u.role === 'ASSESSOR_RUA')).toBe(true);
+    expect(resultado.some((u) => u.nome === 'Rua Um')).toBe(true);
+    expect(resultado.some((u) => u.nome === 'Gabinete Um')).toBe(false);
+  });
+
+  it('combina filtro de role com filtro de ativo', async () => {
+    const criado = await userRepo.create({ nome: 'Rua Inativo', telefone: '+5534999996602', role: 'ASSESSOR_RUA' });
+    await userRepo.setAtivo(criado.id, false);
+    await userRepo.create({ nome: 'Rua Ativo', telefone: '+5534999996603', role: 'ASSESSOR_RUA' });
+
+    const resultado = await userRepo.list({ role: 'ASSESSOR_RUA', ativo: true });
+
+    expect(resultado.some((u) => u.nome === 'Rua Ativo')).toBe(true);
+    expect(resultado.some((u) => u.nome === 'Rua Inativo')).toBe(false);
+  });
+});
+
 describe('RefreshTokenRepository', () => {
   it('cria, encontra por hash válido e revoga', async () => {
     const user = await userRepo.create({ nome: 'Bia Teste', telefone: '+5534999990002', role: 'CHEFE' });
