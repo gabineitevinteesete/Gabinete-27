@@ -6,14 +6,18 @@ import { apiClient } from '@/services/api-client';
 import { STATUS_LABEL } from '@/lib/request-status';
 import type { ResumoDashboard as ResumoDashboardData } from '@/types/request';
 
-function Barra({ label, quantidade, maximo, href }: { label: string; quantidade: number; maximo: number; href: string }) {
+function Barra({ label, quantidade, maximo, href }: { label: string; quantidade: number; maximo: number; href?: string }) {
   const percentual = maximo === 0 ? 0 : Math.round((quantidade / maximo) * 100);
   return (
     <div className="mb-2">
       <div className="flex justify-between text-sm">
-        <Link href={href} className="text-primary-dark hover:underline">
-          {label}
-        </Link>
+        {href ? (
+          <Link href={href} className="text-primary-dark hover:underline">
+            {label}
+          </Link>
+        ) : (
+          <span className="text-primary-dark">{label}</span>
+        )}
         <span className="font-medium">{quantidade}</span>
       </div>
       <div className="mt-1 h-2 rounded-full bg-gray-100">
@@ -66,7 +70,7 @@ export function ResumoDashboard() {
             label={item.bairro}
             quantidade={item.quantidade}
             maximo={maximoBairro}
-            href={`/painel/demandas?bairro=${encodeURIComponent(item.bairro)}`}
+            href={item.bairro === 'Sem bairro' ? undefined : `/painel/demandas?bairro=${encodeURIComponent(item.bairro)}`}
           />
         ))}
       </div>
