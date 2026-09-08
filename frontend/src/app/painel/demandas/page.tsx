@@ -19,13 +19,15 @@ interface ListaDemandasResposta {
 export default function DemandasPage() {
   const searchParams = useSearchParams();
   const assessorResponsavelIdInicial = searchParams.get('assessorResponsavelId') ?? '';
+  const bairroInicial = searchParams.get('bairro') ?? '';
+  const statusInicial = searchParams.get('status') ?? '';
 
   const [itens, setItens] = useState<DemandaResumo[]>([]);
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
-  const [bairro, setBairro] = useState('');
-  const [bairroBuscado, setBairroBuscado] = useState('');
-  const [status, setStatus] = useState('');
+  const [bairro, setBairro] = useState(bairroInicial);
+  const [bairroBuscado, setBairroBuscado] = useState(bairroInicial);
+  const [status, setStatus] = useState(statusInicial);
   const [assessorResponsavelId] = useState(assessorResponsavelIdInicial);
   const [carregando, setCarregando] = useState(true);
   const tamanhoPagina = 20;
