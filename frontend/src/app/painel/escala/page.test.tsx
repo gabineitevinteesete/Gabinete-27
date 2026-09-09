@@ -24,7 +24,7 @@ describe('EscalaPage', () => {
     render(<EscalaPage />);
 
     await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith('/escala?mes=2026-09', { auth: true }));
-    expect(await screen.findByText('2026-09')).toBeInTheDocument();
+    expect(await screen.findByText('Setembro de 2026')).toBeInTheDocument();
   });
 
   it('abre o painel do dia ao clicar num dia, editável para o chefe', async () => {
@@ -32,11 +32,11 @@ describe('EscalaPage', () => {
     vi.mocked(apiClient.request).mockResolvedValueOnce({ dias: {} }).mockResolvedValueOnce([]);
 
     render(<EscalaPage />);
-    await screen.findByText('2026-09');
+    await screen.findByText('Setembro de 2026');
 
     fireEvent.click(screen.getByText('15'));
 
-    expect(await screen.findByText('Escala de 2026-09-15')).toBeInTheDocument();
+    expect(await screen.findByText('Escala de 15/09/2026')).toBeInTheDocument();
   });
 
   it('mostra mensagem de erro quando a API falha', async () => {

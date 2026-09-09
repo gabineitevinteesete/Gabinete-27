@@ -112,4 +112,34 @@ describe('PUT /escala/:data', () => {
 
     expect(res.status).toBe(400);
   }, 30000);
+
+  it('rejeita uma data inexistente no calendário com 400', async () => {
+    const { accessToken } = await loginComoAssessor('CHEFE', '+5534999995510');
+
+    const res = await request(app)
+      .put('/escala/2026-02-30')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ atribuicoes: [] });
+
+    expect(res.status).toBe(400);
+  }, 30000);
+
+  it('rejeita userId duplicado nas atribuições com 400', async () => {
+    const { accessToken } = await loginComoAssessor('CHEFE', '+5534999995511');
+    const assessor = await testPrisma.user.create({
+      data: { nome: 'Carla Gabinete', telefone: '+5534999995512', role: 'ASSESSOR_GABINETE' },
+    });
+
+    const res = await request(app)
+      .put('/escala/2026-09-16')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        atribuicoes: [
+          { userId: assessor.id, local: 'GABINETE' },
+          { userId: assessor.id, local: 'RUA' },
+        ],
+      });
+
+    expect(res.status).toBe(400);
+  }, 30000);
 });
