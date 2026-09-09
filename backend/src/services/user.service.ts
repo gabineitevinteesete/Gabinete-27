@@ -104,7 +104,7 @@ export class UserService {
     return { status: 'ok', user };
   }
 
-  async listar(filter?: { ativo?: boolean }): Promise<PublicUser[]> {
+  async listar(filter?: { ativo?: boolean; role?: UserRoleValue }): Promise<PublicUser[]> {
     return this.userRepo.list(filter);
   }
 
