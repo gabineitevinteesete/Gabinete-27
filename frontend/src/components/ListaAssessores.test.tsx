@@ -99,3 +99,27 @@ describe('ListaAssessores — assessor de gabinete', () => {
     expect(screen.getByLabelText('Nome')).toHaveValue('Beto Gabinete');
   });
 });
+
+describe('ListaAssessores — múltiplas linhas', () => {
+  it('distingue os botões de ação de cada linha pelo nome acessível', async () => {
+    const outroAssessor = {
+      id: 'a2',
+      nome: 'Beto Gabinete',
+      telefone: '+5534999994444',
+      role: 'ASSESSOR_GABINETE' as const,
+      ativo: true,
+      pinDefinido: true,
+    };
+    vi.mocked(apiClient.request).mockResolvedValueOnce([assessorRua, outroAssessor]);
+
+    render(<ListaAssessores />);
+
+    expect(await screen.findByText('Ana Rua')).toBeInTheDocument();
+    expect(screen.getByText('Beto Gabinete')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: 'Editar Ana Rua' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar Beto Gabinete' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Desativar Ana Rua' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Desativar Beto Gabinete' })).toBeInTheDocument();
+  });
+});

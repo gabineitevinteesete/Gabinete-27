@@ -78,7 +78,11 @@ export function createFakeUserRepo(seed: StoredUser[] = []): UserRepository & { 
     async list(filter) {
       // Cópia rasa: sem isso o caso sem filtro devolveria o array interno por referência e
       // um caller poderia mutar o estado do fake sem passar pelos métodos do repositório.
-      return filter?.ativo === undefined ? [...users] : users.filter((u) => u.ativo === filter.ativo);
+      return users.filter(
+        (u) =>
+          (filter?.ativo === undefined || u.ativo === filter.ativo) &&
+          (filter?.role === undefined || u.role === filter.role),
+      );
     },
   };
 }

@@ -47,6 +47,7 @@ describe('ModalAssessor (editar)', () => {
     render(<ModalAssessor modo="editar" assessor={assessorFake} onFechar={() => {}} onSalvo={onSalvo} />);
 
     expect(screen.getByLabelText('Nome')).toHaveValue('Ana Rua');
+    expect(screen.getByLabelText('Telefone')).toHaveValue('(34) 99999-1234');
     expect(screen.queryByLabelText('Papel')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Ana Corrigida' } });
