@@ -27,6 +27,7 @@ describe('PainelDiaEscala (somente leitura)', () => {
     );
 
     expect(screen.getByText(/Ana/)).toBeInTheDocument();
+    expect(screen.getByText('Escala de 15/09/2026')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Salvar' })).not.toBeInTheDocument();
   });
 

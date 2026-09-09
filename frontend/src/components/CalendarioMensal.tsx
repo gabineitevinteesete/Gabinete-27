@@ -5,6 +5,12 @@ import type { AtribuicaoEscala } from '@/types/escala';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+function formatarMesExtenso(mes: string): string {
+  const data = new Date(`${mes}-01T00:00:00.000Z`);
+  const texto = data.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 interface CalendarioMensalProps {
   mes: string;
   escalaPorDia: Record<string, AtribuicaoEscala[]>;
@@ -27,7 +33,7 @@ export function CalendarioMensal({ mes, escalaPorDia, onSelecionarDia, onMudarMe
         >
           ‹
         </button>
-        <span className="text-sm font-semibold text-primary-dark">{mes}</span>
+        <span className="text-sm font-semibold text-primary-dark">{formatarMesExtenso(mes)}</span>
         <button
           type="button"
           onClick={() => onMudarMes(mesSeguinte(mes))}

@@ -15,6 +15,10 @@ interface PainelDiaEscalaProps {
 
 type SelecaoLocal = LocalEscalaValue | '';
 
+function formatarDataBr(data: string): string {
+  return new Date(`${data}T00:00:00.000Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+
 export function PainelDiaEscala({ data, atribuicoes, podeEditar, onFechar, onSalvo }: PainelDiaEscalaProps) {
   const [assessores, setAssessores] = useState<PublicUser[]>([]);
   const [selecoes, setSelecoes] = useState<Record<string, SelecaoLocal>>({});
@@ -73,7 +77,7 @@ export function PainelDiaEscala({ data, atribuicoes, podeEditar, onFechar, onSal
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-card bg-white p-4 shadow-lg">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-primary-dark">Escala de {data}</h2>
+          <h2 className="text-sm font-semibold text-primary-dark">Escala de {formatarDataBr(data)}</h2>
           <button type="button" onClick={onFechar} aria-label="Fechar" className="text-gray-500 hover:text-gray-700">
             ✕
           </button>

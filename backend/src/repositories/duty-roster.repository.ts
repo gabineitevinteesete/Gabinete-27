@@ -19,7 +19,7 @@ export function createDutyRosterRepository(prisma: PrismaClient): DutyRosterRepo
       const entradas = await prisma.dutyRosterEntry.findMany({
         where: { data: { gte: mesInicio, lt: mesFim } },
         include: { user: { select: { nome: true } } },
-        orderBy: { data: 'asc' },
+        orderBy: [{ data: 'asc' }, { user: { nome: 'asc' } }],
       });
 
       const dias: Record<string, AtribuicaoEscala[]> = {};
