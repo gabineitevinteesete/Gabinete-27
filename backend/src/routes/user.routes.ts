@@ -18,6 +18,7 @@ export function createUserRouter(deps: { userService: UserService; userRepo: Use
   router.use(auth, soChefe);
   router.post('/', asyncHandler(controller.criar));
   router.get('/', asyncHandler(controller.listar));
+  router.patch('/:id', asyncHandler(controller.editar));
   router.patch('/:id/role', asyncHandler(controller.atualizarRole));
   router.patch('/:id/ativo', asyncHandler(controller.definirAtivo));
 

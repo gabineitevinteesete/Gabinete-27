@@ -34,14 +34,16 @@ export const apiClient = {
     path: string,
     options: { method?: string; body?: unknown; auth?: boolean } = {},
   ): Promise<T> {
+    const ehFormData = options.body instanceof FormData;
+
     const buildInit = (): RequestInit => ({
       method: options.method ?? 'GET',
       headers: {
-        'Content-Type': 'application/json',
+        ...(ehFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(options.auth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       credentials: 'include',
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: ehFormData ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
     let res = await rawRequest(path, buildInit());
