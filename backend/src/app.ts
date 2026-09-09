@@ -25,6 +25,9 @@ import { InternalNoteService } from './services/internal-note.service.js';
 import { createDashboardRepository } from './repositories/dashboard.repository.js';
 import { DashboardService } from './services/dashboard.service.js';
 import { createDashboardRouter } from './routes/dashboard.routes.js';
+import { createDutyRosterRepository } from './repositories/duty-roster.repository.js';
+import { DutyRosterService } from './services/duty-roster.service.js';
+import { createDutyRosterRouter } from './routes/duty-roster.routes.js';
 
 export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUploader }): express.Express {
   const env = loadEnv();
@@ -57,6 +60,9 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
   const dashboardRepo = createDashboardRepository(prisma);
   const dashboardService = new DashboardService({ dashboardRepo });
 
+  const dutyRosterRepo = createDutyRosterRepository(prisma);
+  const dutyRosterService = new DutyRosterService({ dutyRosterRepo, userRepo });
+
   const authService = new AuthService({ userRepo, refreshTokenRepo, loginAttemptRepo, auditLogRepo });
   const userService = new UserService({ userRepo, auditLogRepo });
 
@@ -69,6 +75,7 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
   app.use('/tipos-demanda', createRequestTypeRouter({ requestTypeRepo, userRepo }));
   app.use('/demandas', createRequestRouter({ requestService, userRepo, internalNoteService }));
   app.use('/dashboard', createDashboardRouter({ dashboardService, userRepo }));
+  app.use('/escala', createDutyRosterRouter({ dutyRosterService, userRepo }));
 
   app.use(errorHandler);
 
