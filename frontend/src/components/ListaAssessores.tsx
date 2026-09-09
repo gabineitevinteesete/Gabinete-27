@@ -150,6 +150,7 @@ export function ListaAssessores() {
                       <button
                         type="button"
                         onClick={() => alternarAtivo(assessor)}
+                        aria-label={`${assessor.ativo ? 'Desativar' : 'Ativar'} ${assessor.nome}`}
                         className="text-xs font-medium text-primary-dark hover:underline"
                       >
                         {assessor.ativo ? 'Desativar' : 'Ativar'}
@@ -157,6 +158,7 @@ export function ListaAssessores() {
                       <button
                         type="button"
                         onClick={() => setModalAberto(assessor)}
+                        aria-label={`Editar ${assessor.nome}`}
                         className="text-xs font-medium text-primary-dark hover:underline"
                       >
                         Editar

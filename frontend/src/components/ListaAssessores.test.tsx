@@ -31,7 +31,7 @@ describe('ListaAssessores — assessor de rua', () => {
 
     expect(await screen.findByText('Ana Rua')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Desativar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Desativar Ana Rua' }));
 
     await waitFor(() => expect(screen.getByText('Inativo')).toBeInTheDocument());
     const [url, options] = vi.mocked(apiClient.request).mock.calls[1]!;
@@ -71,7 +71,7 @@ describe('ListaAssessores — chefe', () => {
     render(<ListaAssessores />);
 
     expect(await screen.findByText('Chefe Um')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Desativar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Desativar Chefe Um' }));
 
     expect(await screen.findByText('Não é possível remover o último chefe ativo do gabinete')).toBeInTheDocument();
   });
@@ -93,7 +93,7 @@ describe('ListaAssessores — assessor de gabinete', () => {
     render(<ListaAssessores />);
 
     expect(await screen.findByText('Beto Gabinete')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Beto Gabinete' }));
 
     expect(screen.getByText('Editar assessor')).toBeInTheDocument();
     expect(screen.getByLabelText('Nome')).toHaveValue('Beto Gabinete');
