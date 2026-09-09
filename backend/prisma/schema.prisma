@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -26,6 +27,11 @@ enum RequestStatus {
   RECUSADA
 }
 
+enum LocalEscala {
+  GABINETE
+  RUA
+}
+
 model User {
   id          String   @id @default(uuid())
   nome        String
@@ -40,9 +46,14 @@ model User {
   refreshTokens        RefreshToken[]
   auditLogsComoAtor    AuditLog[]              @relation("ActorAuditLogs")
   demandasResponsavel  Request[]               @relation("AssessorResponsavel")
+  demandasCriadas      Request[]               @relation("RequestCriadoPor")
   historicoAlteracoes  RequestStatusHistory[]  @relation("StatusHistoryUser")
   observacoesInternas  InternalNote[]          @relation("InternalNoteAuthor")
   notificacoes         Notification[]
+  reatribuicoesComoAnterior RequestReassignmentHistory[] @relation("ReassignmentFrom")
+  reatribuicoesComoNovo     RequestReassignmentHistory[] @relation("ReassignmentTo")
+  reatribuicoesFeitas       RequestReassignmentHistory[] @relation("ReassignmentBy")
+  escalasDoDia              DutyRosterEntry[]
 
   @@map("users")
 }
@@ -123,6 +134,8 @@ model Request {
   requestType            RequestType   @relation(fields: [requestTypeId], references: [id])
   assessorResponsavelId  String
   assessorResponsavel    User          @relation("AssessorResponsavel", fields: [assessorResponsavelId], references: [id])
+  criadoPorId            String
+  criadoPor              User          @relation("RequestCriadoPor", fields: [criadoPorId], references: [id])
   status                 RequestStatus @default(RASCUNHO)
   numeroProtocolo        String?
   autorizacaoDados       Boolean       @default(false)
@@ -135,6 +148,7 @@ model Request {
   observacoes   InternalNote[]
   notificacoes  Notification[]
   consentimento PrivacyConsent?
+  reatribuicoes RequestReassignmentHistory[]
 
   @@index([status])
   @@index([bairro])
@@ -172,6 +186,22 @@ model RequestStatusHistory {
   @@map("request_status_history")
 }
 
+model RequestReassignmentHistory {
+  id                 String   @id @default(uuid())
+  requestId          String
+  request            Request  @relation(fields: [requestId], references: [id])
+  assessorAnteriorId String
+  assessorAnterior   User     @relation("ReassignmentFrom", fields: [assessorAnteriorId], references: [id])
+  assessorNovoId     String
+  assessorNovo       User     @relation("ReassignmentTo", fields: [assessorNovoId], references: [id])
+  reatribuidoPorId   String
+  reatribuidoPor     User     @relation("ReassignmentBy", fields: [reatribuidoPorId], references: [id])
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId])
+  @@map("request_reassignment_history")
+}
+
 model InternalNote {
   id        String   @id @default(uuid())
   requestId String
@@ -180,6 +210,7 @@ model InternalNote {
   autor     User     @relation("InternalNoteAuthor", fields: [autorId], references: [id])
   texto     String
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime? @db.Timestamptz(3)
 
   @@index([requestId])
   @@map("internal_notes")
@@ -209,4 +240,18 @@ model PrivacyConsent {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   @@map("privacy_consents")
+}
+
+model DutyRosterEntry {
+  id        String      @id @default(uuid())
+  data      DateTime    @db.Date
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  local     LocalEscala
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@unique([data, userId])
+  @@index([data])
+  @@map("duty_roster_entries")
 }

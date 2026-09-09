@@ -19,3 +19,17 @@ export const definirAtivoSchema = z.object({
 export const usuarioIdParamsSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const editarUsuarioSchema = z
+  .object({
+    nome: z.string().min(2).optional(),
+    telefone: z.string().min(10).optional(),
+  })
+  .refine((data) => data.nome !== undefined || data.telefone !== undefined, {
+    message: 'Informe ao menos um campo para atualizar',
+  });
+
+export const listarUsuariosQuerySchema = z.object({
+  ativo: z.enum(['true', 'false']).optional(),
+  role: z.enum(['CHEFE', 'ASSESSOR_RUA', 'ASSESSOR_GABINETE']).optional(),
+});

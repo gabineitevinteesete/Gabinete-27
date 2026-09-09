@@ -12,6 +12,11 @@ export type CriarAssessorResult =
 // recuperação pela própria aplicação.
 export type AlterarUsuarioResult = { status: 'ok'; user: PublicUser } | { status: 'ultimo_chefe' };
 
+export type EditarAssessorResult =
+  | { status: 'ok'; user: PublicUser }
+  | { status: 'telefone_invalido' }
+  | { status: 'telefone_duplicado' };
+
 export class UserService {
   private userRepo: UserRepository;
   private auditLogRepo: AuditLogRepository;
@@ -64,7 +69,42 @@ export class UserService {
     return { status: 'ok', user };
   }
 
-  async listar(filter?: { ativo?: boolean }): Promise<PublicUser[]> {
+  async editarAssessor(input: {
+    userId: string;
+    nome?: string;
+    telefone?: string;
+    atualizadoPorId: string;
+    ip?: string;
+  }): Promise<EditarAssessorResult> {
+    let telefoneNormalizado: string | undefined;
+    if (input.telefone !== undefined) {
+      if (!isValidBrazilianPhone(input.telefone)) {
+        return { status: 'telefone_invalido' };
+      }
+      telefoneNormalizado = normalizePhone(input.telefone);
+      const existente = await this.userRepo.findByTelefone(telefoneNormalizado);
+      if (existente && existente.id !== input.userId) {
+        return { status: 'telefone_duplicado' };
+      }
+    }
+
+    const user = await this.userRepo.update(input.userId, {
+      nome: input.nome,
+      telefone: telefoneNormalizado,
+    });
+
+    await this.auditLogRepo.record({
+      actorUserId: input.atualizadoPorId,
+      acao: 'EDITAR_USUARIO',
+      entidade: 'User',
+      entidadeId: input.userId,
+      ip: input.ip,
+    });
+
+    return { status: 'ok', user };
+  }
+
+  async listar(filter?: { ativo?: boolean; role?: UserRoleValue }): Promise<PublicUser[]> {
     return this.userRepo.list(filter);
   }
 

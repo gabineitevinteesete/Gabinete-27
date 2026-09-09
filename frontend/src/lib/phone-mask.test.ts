@@ -17,4 +17,8 @@ describe('maskPhone', () => {
   it('trunca em 11 dígitos', () => {
     expect(maskPhone('349999988889999')).toBe('(34) 99999-8888');
   });
+
+  it('remove o prefixo 55 quando o valor já vem no formato internacional', () => {
+    expect(maskPhone('+5534999991234')).toBe('(34) 99999-1234');
+  });
 });

@@ -8,7 +8,7 @@ import { requireRole } from '../middlewares/require-role.js';
 
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 10,
+  limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Muitas tentativas. Tente novamente em instantes.' },
