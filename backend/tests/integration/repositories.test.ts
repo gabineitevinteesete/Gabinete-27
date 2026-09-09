@@ -33,6 +33,10 @@ beforeEach(async () => {
   await prisma.internalNote.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
+  // dutyRosterEntry referencia user com FK RESTRICT — precisa ser limpa antes de
+  // user.deleteMany() (outro arquivo de teste pode deixar entradas de escala para
+  // trás quando os testes são rodados em conjunto/fora de ordem).
+  await prisma.dutyRosterEntry.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 });

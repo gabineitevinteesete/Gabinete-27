@@ -14,8 +14,11 @@ export async function resetDb() {
   await testPrisma.requestStatusHistory.deleteMany();
   await testPrisma.requestReassignmentHistory.deleteMany();
   await testPrisma.internalNote.deleteMany();
+  await testPrisma.privacyConsent.deleteMany();
   await testPrisma.request.deleteMany();
   await testPrisma.requestType.deleteMany();
+  // dutyRosterEntry referencia users com FK — precisa ser limpa antes de user.
+  await testPrisma.dutyRosterEntry.deleteMany();
   await testPrisma.refreshToken.deleteMany();
   await testPrisma.user.deleteMany();
 }

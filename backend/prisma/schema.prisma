@@ -27,6 +27,11 @@ enum RequestStatus {
   RECUSADA
 }
 
+enum LocalEscala {
+  GABINETE
+  RUA
+}
+
 model User {
   id          String   @id @default(uuid())
   nome        String
@@ -48,6 +53,7 @@ model User {
   reatribuicoesComoAnterior RequestReassignmentHistory[] @relation("ReassignmentFrom")
   reatribuicoesComoNovo     RequestReassignmentHistory[] @relation("ReassignmentTo")
   reatribuicoesFeitas       RequestReassignmentHistory[] @relation("ReassignmentBy")
+  escalasDoDia              DutyRosterEntry[]
 
   @@map("users")
 }
@@ -234,4 +240,18 @@ model PrivacyConsent {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   @@map("privacy_consents")
+}
+
+model DutyRosterEntry {
+  id        String      @id @default(uuid())
+  data      DateTime    @db.Date
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  local     LocalEscala
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@unique([data, userId])
+  @@index([data])
+  @@map("duty_roster_entries")
 }
