@@ -183,3 +183,94 @@ describe('UserService — proteção do último chefe ativo', () => {
     expect(mesmoPapel.status).toBe('ok');
   });
 });
+
+describe('UserService.editarAssessor', () => {
+  it('atualiza nome e telefone com telefone normalizado', async () => {
+    const { service, auditLogRepo } = buildService();
+    const criado = await service.criarAssessor({
+      nome: 'Nome Original',
+      telefone: '(34) 99999-1234',
+      role: 'ASSESSOR_RUA',
+      criadoPorId: 'chefe-1',
+    });
+    if (criado.status !== 'ok') throw new Error('esperava ok');
+
+    const result = await service.editarAssessor({
+      userId: criado.user.id,
+      nome: 'Nome Corrigido',
+      telefone: '(34) 98888-5678',
+      atualizadoPorId: 'chefe-1',
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.user.nome).toBe('Nome Corrigido');
+      expect(result.user.telefone).toBe('+5534988885678');
+    }
+    expect(auditLogRepo.records).toHaveLength(2); // criação + edição
+  });
+
+  it('permite manter o mesmo telefone do próprio usuário', async () => {
+    const { service } = buildService();
+    const criado = await service.criarAssessor({
+      nome: 'Nome Original',
+      telefone: '(34) 99999-1234',
+      role: 'ASSESSOR_RUA',
+      criadoPorId: 'chefe-1',
+    });
+    if (criado.status !== 'ok') throw new Error('esperava ok');
+
+    const result = await service.editarAssessor({
+      userId: criado.user.id,
+      nome: 'Nome Corrigido',
+      telefone: '(34) 99999-1234',
+      atualizadoPorId: 'chefe-1',
+    });
+
+    expect(result.status).toBe('ok');
+  });
+
+  it('rejeita telefone com formato inválido', async () => {
+    const { service } = buildService();
+    const criado = await service.criarAssessor({
+      nome: 'Nome Original',
+      telefone: '(34) 99999-1234',
+      role: 'ASSESSOR_RUA',
+      criadoPorId: 'chefe-1',
+    });
+    if (criado.status !== 'ok') throw new Error('esperava ok');
+
+    const result = await service.editarAssessor({
+      userId: criado.user.id,
+      telefone: '123',
+      atualizadoPorId: 'chefe-1',
+    });
+
+    expect(result.status).toBe('telefone_invalido');
+  });
+
+  it('rejeita telefone já usado por outro usuário', async () => {
+    const { service } = buildService();
+    await service.criarAssessor({
+      nome: 'Assessor A',
+      telefone: '(34) 99999-1234',
+      role: 'ASSESSOR_RUA',
+      criadoPorId: 'chefe-1',
+    });
+    const criadoB = await service.criarAssessor({
+      nome: 'Assessor B',
+      telefone: '(34) 98888-5678',
+      role: 'ASSESSOR_RUA',
+      criadoPorId: 'chefe-1',
+    });
+    if (criadoB.status !== 'ok') throw new Error('esperava ok');
+
+    const result = await service.editarAssessor({
+      userId: criadoB.user.id,
+      telefone: '(34) 99999-1234',
+      atualizadoPorId: 'chefe-1',
+    });
+
+    expect(result.status).toBe('telefone_duplicado');
+  });
+});

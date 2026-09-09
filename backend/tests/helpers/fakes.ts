@@ -69,6 +69,12 @@ export function createFakeUserRepo(seed: StoredUser[] = []): UserRepository & { 
       user.ativo = ativo;
       return user;
     },
+    async update(id, data) {
+      const user = users.find((u) => u.id === id)!;
+      if (data.nome !== undefined) user.nome = data.nome;
+      if (data.telefone !== undefined) user.telefone = data.telefone;
+      return user;
+    },
     async list(filter) {
       // Cópia rasa: sem isso o caso sem filtro devolveria o array interno por referência e
       // um caller poderia mutar o estado do fake sem passar pelos métodos do repositório.
