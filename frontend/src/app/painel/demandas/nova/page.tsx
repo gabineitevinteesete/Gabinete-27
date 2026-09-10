@@ -7,6 +7,7 @@ import { TextField } from '@/components/TextField';
 import { CepField } from '@/components/CepField';
 import { TipoDemandaChips } from '@/components/TipoDemandaChips';
 import { PhotoUploader, type FotoSelecionada } from '@/components/PhotoUploader';
+import { ModalAvisoPrivacidade } from '@/components/ModalAvisoPrivacidade';
 import { maskPhone } from '@/lib/phone-mask';
 import { apiClient, ApiError } from '@/services/api-client';
 import type { TipoDemanda } from '@/types/request';
@@ -32,6 +33,7 @@ export default function NovaDemandaPage() {
   const [descricao, setDescricao] = useState('');
   const [descricaoOutroAssunto, setDescricaoOutroAssunto] = useState('');
   const [autorizacaoDados, setAutorizacaoDados] = useState(false);
+  const [avisoAberto, setAvisoAberto] = useState(false);
   const [fotos, setFotos] = useState<FotoSelecionada[]>([]);
 
   const [erro, setErro] = useState<string | null>(null);
@@ -193,15 +195,26 @@ export default function NovaDemandaPage() {
         />
       </div>
 
-      <label className="flex items-start gap-2 text-xs text-gray-600">
-        <input
-          type="checkbox"
-          checked={autorizacaoDados}
-          onChange={(e) => setAutorizacaoDados(e.target.checked)}
-          className="mt-1"
-        />
-        Autorizo o uso e armazenamento dos dados desta demanda pelo gabinete, conforme o aviso de privacidade.
-      </label>
+      <div className="flex flex-col gap-1">
+        <label className="flex items-start gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={autorizacaoDados}
+            onChange={(e) => setAutorizacaoDados(e.target.checked)}
+            className="mt-1"
+          />
+          Autorizo o uso e armazenamento dos dados desta demanda pelo gabinete, conforme o aviso de privacidade.
+        </label>
+        <button
+          type="button"
+          onClick={() => setAvisoAberto(true)}
+          className="w-fit text-xs font-medium text-primary-dark hover:underline"
+        >
+          Ver aviso de privacidade
+        </button>
+      </div>
+
+      {avisoAberto && <ModalAvisoPrivacidade onFechar={() => setAvisoAberto(false)} />}
 
       {erro && <p className="text-sm text-red-600">{erro}</p>}
 
