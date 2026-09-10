@@ -181,6 +181,28 @@ export function createFakeRequestTypeRepo(
     async findById(id) {
       return tipos.find((t) => t.id === id) ?? null;
     },
+    async findByNome(nome) {
+      return tipos.find((t) => t.nome === nome) ?? null;
+    },
+    async listAll() {
+      return [...tipos].sort((a, b) => a.nome.localeCompare(b.nome));
+    },
+    async create({ nome, exigeDescricaoObrigatoria }) {
+      const tipo = { id: randomUUID(), nome, exigeDescricaoObrigatoria, ativo: true };
+      tipos.push(tipo);
+      return tipo;
+    },
+    async update(id, data) {
+      const tipo = tipos.find((t) => t.id === id)!;
+      if (data.nome !== undefined) tipo.nome = data.nome;
+      if (data.exigeDescricaoObrigatoria !== undefined) tipo.exigeDescricaoObrigatoria = data.exigeDescricaoObrigatoria;
+      return tipo;
+    },
+    async setAtivo(id, ativo) {
+      const tipo = tipos.find((t) => t.id === id)!;
+      tipo.ativo = ativo;
+      return tipo;
+    },
   };
 }
 
