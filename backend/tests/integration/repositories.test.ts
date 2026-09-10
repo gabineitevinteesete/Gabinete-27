@@ -4,6 +4,7 @@ import { createUserRepository } from '../../src/repositories/user.repository.js'
 import { createRefreshTokenRepository } from '../../src/repositories/refresh-token.repository.js';
 import { createLoginAttemptRepository } from '../../src/repositories/login-attempt.repository.js';
 import { createAuditLogRepository } from '../../src/repositories/audit-log.repository.js';
+import { createRequestTypeRepository } from '../../src/repositories/request-type.repository.js';
 
 const prisma = new PrismaClient();
 
@@ -11,6 +12,7 @@ const userRepo = createUserRepository(prisma);
 const refreshTokenRepo = createRefreshTokenRepository(prisma);
 const loginAttemptRepo = createLoginAttemptRepository(prisma);
 const auditLogRepo = createAuditLogRepository(prisma);
+const requestTypeRepo = createRequestTypeRepository(prisma);
 
 beforeAll(async () => {
   await prisma.$connect();
@@ -132,5 +134,35 @@ describe('AuditLogRepository', () => {
     });
     const count = await prisma.auditLog.count();
     expect(count).toBe(1);
+  });
+});
+
+describe('RequestTypeRepository', () => {
+  it('cria, edita, busca por nome e ativa/desativa', async () => {
+    const criado = await requestTypeRepo.create({ nome: 'Buraco na via', exigeDescricaoObrigatoria: false });
+    expect(criado.ativo).toBe(true);
+
+    const encontrado = await requestTypeRepo.findByNome('Buraco na via');
+    expect(encontrado?.id).toBe(criado.id);
+
+    const editado = await requestTypeRepo.update(criado.id, { exigeDescricaoObrigatoria: true });
+    expect(editado.exigeDescricaoObrigatoria).toBe(true);
+
+    const desativado = await requestTypeRepo.setAtivo(criado.id, false);
+    expect(desativado.ativo).toBe(false);
+  });
+
+  it('listAll inclui ativos e inativos; listActive só ativos', async () => {
+    const ativo = await requestTypeRepo.create({ nome: 'Tipo Ativo X', exigeDescricaoObrigatoria: false });
+    const inativoBase = await requestTypeRepo.create({ nome: 'Tipo Inativo X', exigeDescricaoObrigatoria: false });
+    await requestTypeRepo.setAtivo(inativoBase.id, false);
+
+    const todos = await requestTypeRepo.listAll();
+    expect(todos.some((t) => t.id === ativo.id)).toBe(true);
+    expect(todos.some((t) => t.id === inativoBase.id)).toBe(true);
+
+    const ativos = await requestTypeRepo.listActive();
+    expect(ativos.some((t) => t.id === ativo.id)).toBe(true);
+    expect(ativos.some((t) => t.id === inativoBase.id)).toBe(false);
   });
 });
