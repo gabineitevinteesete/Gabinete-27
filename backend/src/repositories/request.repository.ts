@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../utils/request-status.js';
+import { AVISO_PRIVACIDADE_TEXTO_ATUAL } from '../utils/aviso-privacidade.js';
 
 export interface CriarRequestInput {
   codigoInterno: string;
@@ -187,6 +188,12 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
           assessorResponsavelId: input.assessorResponsavelId,
           criadoPorId: input.criadoPorId,
           autorizacaoDados: input.autorizacaoDados,
+          consentimento: {
+            create: {
+              autorizado: input.autorizacaoDados,
+              textoVersao: AVISO_PRIVACIDADE_TEXTO_ATUAL,
+            },
+          },
           status: 'ENVIADA',
           fotos: {
             create: fotos.map((f) => ({
