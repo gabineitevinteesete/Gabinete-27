@@ -14,6 +14,7 @@ import type { PhotoUploader } from './services/cloudinary-uploader.service.js';
 import { createCloudinaryUploader } from './services/cloudinary-uploader.service.js';
 import { createRequestRepository } from './repositories/request.repository.js';
 import { RequestService } from './services/request.service.js';
+import { RequestTypeService } from './services/request-type.service.js';
 import { createRequestRouter } from './routes/request.routes.js';
 import { AuthService } from './services/auth.service.js';
 import { UserService } from './services/user.service.js';
@@ -65,6 +66,7 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
 
   const authService = new AuthService({ userRepo, refreshTokenRepo, loginAttemptRepo, auditLogRepo });
   const userService = new UserService({ userRepo, auditLogRepo });
+  const requestTypeService = new RequestTypeService({ requestTypeRepo, auditLogRepo });
 
   app.get('/health', (_req, res) => {
     res.json({ success: true, data: { status: 'ok' } });
@@ -72,7 +74,7 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
 
   app.use('/auth', createAuthRouter({ authService, userRepo }));
   app.use('/usuarios', createUserRouter({ userService, userRepo }));
-  app.use('/tipos-demanda', createRequestTypeRouter({ requestTypeRepo, userRepo }));
+  app.use('/tipos-demanda', createRequestTypeRouter({ requestTypeService, userRepo }));
   app.use('/demandas', createRequestRouter({ requestService, userRepo, internalNoteService }));
   app.use('/dashboard', createDashboardRouter({ dashboardService, userRepo }));
   app.use('/escala', createDutyRosterRouter({ dutyRosterService, userRepo }));

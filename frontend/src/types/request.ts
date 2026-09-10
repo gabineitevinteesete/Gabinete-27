@@ -16,6 +16,10 @@ export interface TipoDemanda {
   exigeDescricaoObrigatoria: boolean;
 }
 
+export interface TipoDemandaAdmin extends TipoDemanda {
+  ativo: boolean;
+}
+
 export interface DemandaResumo {
   id: string;
   codigoInterno: string;
