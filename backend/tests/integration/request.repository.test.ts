@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { createRequestRepository, type CriarRequestInput } from '../../src/repositories/request.repository.js';
 import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
+import { AVISO_PRIVACIDADE_TEXTO_ATUAL } from '../../src/utils/aviso-privacidade.js';
 
 const prisma = new PrismaClient();
 const requestRepo = createRequestRepository(prisma);
@@ -288,8 +289,7 @@ describe('RequestRepository.create — PrivacyConsent', () => {
 
     expect(consentimento).not.toBeNull();
     expect(consentimento?.autorizado).toBe(true);
-    expect(consentimento?.textoVersao).toContain('Aviso de Privacidade — Gabinete Digital');
-    expect(consentimento?.textoVersao).toContain('Seus direitos:');
+    expect(consentimento?.textoVersao).toBe(AVISO_PRIVACIDADE_TEXTO_ATUAL);
   });
 
   it('grava autorizado: false quando o input não autoriza', async () => {
