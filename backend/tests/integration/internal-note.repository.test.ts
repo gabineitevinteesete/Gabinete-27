@@ -19,6 +19,7 @@ beforeEach(async () => {
   await prisma.requestPhoto.deleteMany();
   await prisma.requestStatusHistory.deleteMany();
   await prisma.requestReassignmentHistory.deleteMany();
+  await prisma.privacyConsent.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
   // dutyRosterEntry referencia user com FK RESTRICT — precisa ser limpa antes de
