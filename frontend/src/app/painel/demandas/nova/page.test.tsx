@@ -79,4 +79,15 @@ describe('NovaDemandaPage', () => {
     expect(await screen.findByText('Envie de 2 a 4 fotos')).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
+
+  it('abre e fecha o modal do aviso de privacidade', async () => {
+    render(<NovaDemandaPage />);
+    await screen.findByText('Tapa-buraco');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver aviso de privacidade' }));
+    expect(screen.getByText('Aviso de privacidade')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    expect(screen.queryByText('Aviso de privacidade')).not.toBeInTheDocument();
+  });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { createRequestRepository, type CriarRequestInput } from '../../src/repositories/request.repository.js';
 import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
+import { AVISO_PRIVACIDADE_TEXTO_ATUAL } from '../../src/utils/aviso-privacidade.js';
 
 const prisma = new PrismaClient();
 const requestRepo = createRequestRepository(prisma);
@@ -23,6 +24,7 @@ beforeEach(async () => {
   // request.deleteMany() (o arquivo internal-note.routes.test.ts pode deixar notas para
   // trás quando os testes são rodados em conjunto/fora de ordem).
   await prisma.internalNote.deleteMany();
+  await prisma.privacyConsent.deleteMany();
   await prisma.request.deleteMany();
   await prisma.requestType.deleteMany();
   // dutyRosterEntry referencia user com FK RESTRICT — precisa ser limpa antes de
@@ -275,5 +277,26 @@ describe('RequestRepository.create — criadoPorId', () => {
     const linha = await prisma.request.findUniqueOrThrow({ where: { id: criado.id } });
     expect(linha.criadoPorId).toBe(assessorId);
     expect(linha.assessorResponsavelId).toBe(novoAssessor.id);
+  });
+});
+
+describe('RequestRepository.create — PrivacyConsent', () => {
+  it('grava um PrivacyConsent com o texto vigente ao criar a demanda', async () => {
+    // inputBase() já preenche autorizacaoDados: true por padrão.
+    const criado = await requestRepo.create(inputBase(), []);
+
+    const consentimento = await prisma.privacyConsent.findUnique({ where: { requestId: criado.id } });
+
+    expect(consentimento).not.toBeNull();
+    expect(consentimento?.autorizado).toBe(true);
+    expect(consentimento?.textoVersao).toBe(AVISO_PRIVACIDADE_TEXTO_ATUAL);
+  });
+
+  it('grava autorizado: false quando o input não autoriza', async () => {
+    const criado = await requestRepo.create(inputBase({ autorizacaoDados: false }), []);
+
+    const consentimento = await prisma.privacyConsent.findUnique({ where: { requestId: criado.id } });
+
+    expect(consentimento?.autorizado).toBe(false);
   });
 });
