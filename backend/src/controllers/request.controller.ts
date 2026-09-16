@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type { RequestService } from '../services/request.service.js';
 import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../validators/request.validators.js';
 import { HttpError } from '../middlewares/error-handler.js';
+import { getClientIp } from '../utils/request-ip.js';
 
 export function createRequestController(requestService: RequestService) {
   return {
@@ -13,6 +14,7 @@ export function createRequestController(requestService: RequestService) {
         ...dados,
         assessorResponsavelId: req.user!.id,
         fotos: arquivos.map((arquivo) => arquivo.buffer),
+        ip: getClientIp(req),
       });
 
       if (resultado.status === 'ok') {
@@ -58,7 +60,7 @@ export function createRequestController(requestService: RequestService) {
     async editar(req: Request, res: Response) {
       const { id } = demandaIdParamsSchema.parse(req.params);
       const dados = editarDemandaSchema.parse(req.body);
-      const resultado = await requestService.editar(id, dados, req.user!);
+      const resultado = await requestService.editar(id, dados, req.user!, getClientIp(req));
       if (resultado.status === 'nao_encontrada') throw new HttpError(404, 'Demanda não encontrada');
       if (resultado.status === 'sem_permissao') throw new HttpError(403, 'Você não tem permissão para editar esta demanda');
       if (resultado.status === 'tipo_invalido') {

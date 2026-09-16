@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 import { RequestService } from '../../src/services/request.service.js';
-import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo } from '../helpers/fakes.js';
+import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo, createFakeAuditLogRepo } from '../helpers/fakes.js';
 
 async function fotoValida(): Promise<Buffer> {
   return sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer();
@@ -12,8 +12,9 @@ function buildService(tipos: Parameters<typeof createFakeRequestTypeRepo>[0]) {
   const requestRepo = createFakeRequestRepo();
   const photoUploader = createFakePhotoUploader();
   const userRepo = createFakeUserRepo();
-  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
-  return { service, requestRepo, photoUploader };
+  const auditLogRepo = createFakeAuditLogRepo();
+  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
+  return { service, requestRepo, photoUploader, auditLogRepo };
 }
 
 function inputBase(overrides: Record<string, unknown> = {}) {
@@ -43,6 +44,23 @@ describe('RequestService.criar', () => {
     expect(resultado.status).toBe('ok');
     expect(requestRepo.created).toHaveLength(1);
     expect(photoUploader.uploads).toHaveLength(2);
+  });
+
+  it('grava CRIAR_DEMANDA em auditoria com o assessor responsável como ator', async () => {
+    const { service, auditLogRepo } = buildService([
+      { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false, ativo: true },
+    ]);
+    const fotos = [await fotoValida(), await fotoValida()];
+
+    const resultado = await service.criar(inputBase({ fotos }));
+
+    expect(resultado.status).toBe('ok');
+    expect(auditLogRepo.records).toHaveLength(1);
+    expect(auditLogRepo.records[0]).toMatchObject({
+      actorUserId: 'user-1',
+      acao: 'CRIAR_DEMANDA',
+      entidade: 'Request',
+    });
   });
 
   it('rejeita quando o tipo não existe', async () => {

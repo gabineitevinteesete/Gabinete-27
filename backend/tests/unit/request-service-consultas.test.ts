@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { RequestService } from '../../src/services/request.service.js';
-import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo } from '../helpers/fakes.js';
+import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo, createFakeAuditLogRepo } from '../helpers/fakes.js';
 import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
 
 function buildService() {
@@ -12,8 +12,9 @@ function buildService() {
   const userRepo = createFakeUserRepo([
     { id: 'gabinete-1', nome: 'Gabinete', telefone: '+5534988880001', role: 'ASSESSOR_GABINETE', ativo: true, pinDefinido: true, pinHash: null, createdAt: new Date(), updatedAt: new Date() },
   ]);
-  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
-  return { service, requestRepo, userRepo };
+  const auditLogRepo = createFakeAuditLogRepo();
+  const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
+  return { service, requestRepo, userRepo, auditLogRepo };
 }
 
 async function criarDemandaFake(requestRepo: ReturnType<typeof createFakeRequestRepo>, assessorId: string, status = 'ENVIADA') {
@@ -112,6 +113,26 @@ describe('RequestService.editar', () => {
     }
   });
 
+  it('grava EDITAR_DEMANDA em auditoria com quem editou como ator, não com quem criou', async () => {
+    const { service, requestRepo, auditLogRepo } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.editar(
+      demanda.id,
+      { tituloResumido: 'Editado pelo gabinete' },
+      { id: 'gabinete-1', role: 'ASSESSOR_GABINETE' },
+    );
+
+    expect(resultado.status).toBe('ok');
+    expect(auditLogRepo.records).toHaveLength(1);
+    expect(auditLogRepo.records[0]).toMatchObject({
+      actorUserId: 'gabinete-1',
+      acao: 'EDITAR_DEMANDA',
+      entidade: 'Request',
+      entidadeId: demanda.id,
+    });
+  });
+
   it('assessor de rua não edita depois de protocolada', async () => {
     const { service, requestRepo } = buildService();
     const demanda = await criarDemandaFake(requestRepo, 'user-eu', 'PROTOCOLADA');
@@ -158,7 +179,8 @@ describe('RequestService.editar', () => {
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
     const userRepo = createFakeUserRepo();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
+    const auditLogRepo = createFakeAuditLogRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
     const demanda = await criarDemandaFake(requestRepo, 'user-eu');
 
     const resultado = await service.editar(
@@ -177,7 +199,8 @@ describe('RequestService.editar', () => {
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
     const userRepo = createFakeUserRepo();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
+    const auditLogRepo = createFakeAuditLogRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
     const demanda = await criarDemandaFake(requestRepo, 'user-eu');
 
     const resultado = await service.editar(
@@ -195,7 +218,8 @@ describe('RequestService.editar', () => {
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
     const userRepo = createFakeUserRepo();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
+    const auditLogRepo = createFakeAuditLogRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
     const demanda = await requestRepo.create(
       {
         codigoInterno: 'GD-outros',
@@ -251,7 +275,8 @@ describe('RequestService.editar', () => {
     const requestRepo = createFakeRequestRepo();
     const photoUploader = createFakePhotoUploader();
     const userRepo = createFakeUserRepo();
-    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
+    const auditLogRepo = createFakeAuditLogRepo();
+    const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
     const demanda = await criarDemandaFake(requestRepo, 'user-eu');
 
     const resultado = await service.editar(

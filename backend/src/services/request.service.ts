@@ -11,6 +11,7 @@ import type { PhotoUploader } from './cloudinary-uploader.service.js';
 import type { UserRoleValue } from '../utils/jwt.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 import type { HistoricoStatusItem } from '../repositories/request.repository.js';
+import type { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
 import {
@@ -52,6 +53,7 @@ export interface CriarDemandaInput {
   autorizacaoDados: boolean;
   assessorResponsavelId: string;
   fotos: Buffer[];
+  ip?: string;
 }
 
 export type CriarDemandaResultado =
@@ -102,17 +104,20 @@ export class RequestService {
   private requestTypeRepo: RequestTypeRepository;
   private photoUploader: PhotoUploader;
   private userRepo: UserRepository;
+  private auditLogRepo: AuditLogRepository;
 
   constructor(deps: {
     requestRepo: RequestRepository;
     requestTypeRepo: RequestTypeRepository;
     photoUploader: PhotoUploader;
     userRepo: UserRepository;
+    auditLogRepo: AuditLogRepository;
   }) {
     this.requestRepo = deps.requestRepo;
     this.requestTypeRepo = deps.requestTypeRepo;
     this.photoUploader = deps.photoUploader;
     this.userRepo = deps.userRepo;
+    this.auditLogRepo = deps.auditLogRepo;
   }
 
   /**
@@ -205,6 +210,14 @@ export class RequestService {
       fotosEnviadas,
     );
 
+    await this.auditLogRepo.record({
+      actorUserId: input.assessorResponsavelId,
+      acao: 'CRIAR_DEMANDA',
+      entidade: 'Request',
+      entidadeId: demanda.id,
+      ip: input.ip,
+    });
+
     return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
   }
 
@@ -227,7 +240,12 @@ export class RequestService {
     return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
   }
 
-  async editar(id: string, input: EditarRequestInput, usuario: UsuarioAutenticado): Promise<EditarDemandaResultado> {
+  async editar(
+    id: string,
+    input: EditarRequestInput,
+    usuario: UsuarioAutenticado,
+    ip?: string,
+  ): Promise<EditarDemandaResultado> {
     const demanda = await this.requestRepo.findById(id);
     if (!demanda) return { status: 'nao_encontrada' };
 
@@ -266,6 +284,15 @@ export class RequestService {
     }
 
     const atualizado = await this.requestRepo.update(id, dados);
+
+    await this.auditLogRepo.record({
+      actorUserId: usuario.id,
+      acao: 'EDITAR_DEMANDA',
+      entidade: 'Request',
+      entidadeId: id,
+      ip,
+    });
+
     return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
   }
 
