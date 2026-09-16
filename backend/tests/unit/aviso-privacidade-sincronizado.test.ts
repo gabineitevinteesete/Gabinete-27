@@ -20,12 +20,17 @@ function extrairTextoFrontend(): string {
   if (!match) {
     throw new Error('Não foi possível extrair AVISO_PRIVACIDADE_TEXTO de frontend/src/lib/aviso-privacidade.ts');
   }
-  return match[1]!;
+  // fs.readFileSync não normaliza quebras de linha como o transform do TypeScript faz com o
+  // literal do backend — num checkout Windows (core.autocrlf) o arquivo do frontend vem com
+  // \r\n mesmo quando o texto é idêntico. Normaliza os dois lados para a comparação não
+  // depender do sistema operacional de quem roda o teste.
+  return match[1]!.replace(/\r\n/g, '\n');
 }
 
 describe('Sincronia do texto do aviso de privacidade entre backend e frontend', () => {
   it('o texto do frontend é idêntico ao texto gravado pelo backend', () => {
     const textoFrontend = extrairTextoFrontend();
-    expect(textoFrontend).toBe(AVISO_PRIVACIDADE_TEXTO_ATUAL);
+    const textoBackend = AVISO_PRIVACIDADE_TEXTO_ATUAL.replace(/\r\n/g, '\n');
+    expect(textoFrontend).toBe(textoBackend);
   });
 });
