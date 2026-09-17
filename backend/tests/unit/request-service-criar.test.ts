@@ -55,19 +55,22 @@ describe('RequestService.criar', () => {
     const resultado = await service.criar(inputBase({ fotos }));
 
     expect(resultado.status).toBe('ok');
+    if (resultado.status !== 'ok') throw new Error('esperava ok');
     expect(auditLogRepo.records).toHaveLength(1);
     expect(auditLogRepo.records[0]).toMatchObject({
       actorUserId: 'user-1',
       acao: 'CRIAR_DEMANDA',
       entidade: 'Request',
+      entidadeId: resultado.demanda.id,
     });
   });
 
   it('rejeita quando o tipo não existe', async () => {
-    const { service } = buildService([]);
+    const { service, auditLogRepo } = buildService([]);
     const fotos = [await fotoValida(), await fotoValida()];
     const resultado = await service.criar(inputBase({ fotos, requestTypeId: 'nao-existe' }));
     expect(resultado.status).toBe('tipo_invalido');
+    expect(auditLogRepo.records).toHaveLength(0);
   });
 
   it('rejeita quando o tipo está desativado', async () => {

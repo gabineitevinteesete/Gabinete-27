@@ -134,10 +134,11 @@ describe('RequestService.editar', () => {
   });
 
   it('assessor de rua não edita depois de protocolada', async () => {
-    const { service, requestRepo } = buildService();
+    const { service, requestRepo, auditLogRepo } = buildService();
     const demanda = await criarDemandaFake(requestRepo, 'user-eu', 'PROTOCOLADA');
     const resultado = await service.editar(demanda.id, { tituloResumido: 'Novo título' }, { id: 'user-eu', role: 'ASSESSOR_RUA' });
     expect(resultado.status).toBe('sem_permissao');
+    expect(auditLogRepo.records).toHaveLength(0);
   });
 
   it('assessor de rua não edita demanda de outro assessor de rua', async () => {
