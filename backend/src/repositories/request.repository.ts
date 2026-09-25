@@ -112,6 +112,8 @@ export type EditarRequestInput = Partial<
   Omit<CriarRequestInput, 'codigoInterno' | 'assessorResponsavelId' | 'autorizacaoDados'>
 >;
 
+export const TEXTO_DADOS_REMOVIDOS = '[dados removidos a pedido do titular]';
+
 export interface RequestRepository {
   create(input: CriarRequestInput, fotos: FotoParaSalvar[]): Promise<RequestDetail>;
   findById(id: string): Promise<RequestDetail | null>;
@@ -120,6 +122,7 @@ export interface RequestRepository {
   updateStatus(id: string, novoStatus: RequestStatusValue, usuarioId: string, motivo?: string): Promise<RequestDetail>;
   listarHistoricoStatus(id: string): Promise<HistoricoStatusItem[]>;
   reatribuir(id: string, novoAssessorId: string, reatribuidoPorId: string): Promise<RequestDetail>;
+  anonimizar(id: string): Promise<{ publicIds: string[] }>;
 }
 
 const INCLUDE_DETALHE = {
@@ -372,6 +375,30 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
           include: INCLUDE_DETALHE,
         });
         return toDetail(atualizado);
+      });
+    },
+
+    async anonimizar(id) {
+      return prisma.$transaction(async (tx) => {
+        const fotos = await tx.requestPhoto.findMany({ where: { requestId: id }, select: { publicId: true } });
+        await tx.requestPhoto.deleteMany({ where: { requestId: id } });
+        await tx.request.update({
+          where: { id },
+          data: {
+            solicitanteNome: TEXTO_DADOS_REMOVIDOS,
+            solicitanteTelefone: TEXTO_DADOS_REMOVIDOS,
+            solicitanteNascimento: null,
+            cep: null,
+            rua: null,
+            numero: null,
+            complemento: null,
+            pontoReferencia: null,
+            localExato: null,
+            descricao: TEXTO_DADOS_REMOVIDOS,
+            descricaoOutroAssunto: null,
+          },
+        });
+        return { publicIds: fotos.map((f) => f.publicId) };
       });
     },
   };

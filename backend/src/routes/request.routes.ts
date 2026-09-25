@@ -49,6 +49,7 @@ export function createRequestRouter(deps: {
   router.patch('/:id/status', auth, requireRole('ASSESSOR_GABINETE', 'CHEFE'), asyncHandler(controller.mudarStatus));
   router.get('/:id/historico-status', auth, asyncHandler(controller.historicoStatus));
   router.patch('/:id/reatribuir', auth, requireRole('CHEFE'), asyncHandler(controller.reatribuir));
+  router.patch('/:id/anonimizar', auth, requireRole('CHEFE'), asyncHandler(controller.anonimizar));
 
   const soGabineteOuChefe = requireRole('ASSESSOR_GABINETE', 'CHEFE');
   router.post('/:id/observacoes', auth, soGabineteOuChefe, asyncHandler(internalNoteController.criar));

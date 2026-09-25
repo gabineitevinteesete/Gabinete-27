@@ -41,6 +41,7 @@ function camposBase(tipoId: string) {
   return {
     solicitanteNome: 'Maria Solicitante',
     solicitanteTelefone: '(34) 99999-0000',
+    bairro: 'Centro',
     localExato: 'Em frente ao 100',
     tituloResumido: 'Buraco na rua',
     descricao: 'Buraco grande',
@@ -477,5 +478,69 @@ describe('PATCH /demandas/:id/reatribuir', () => {
       .send({ novoAssessorId: outroChefe.id });
 
     expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
+});
+
+describe('PATCH /demandas/:id/anonimizar', () => {
+  it('bloqueia quem não é chefe com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998022');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/anonimizar`)
+      .set('Authorization', `Bearer ${tokenRua}`);
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('chefe anonimiza a demanda: campos identificáveis somem, fotos são excluídas', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998023');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998024');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/anonimizar`)
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(200);
+
+    const linha = await testPrisma.request.findUniqueOrThrow({ where: { id: demanda.id } });
+    expect(linha.solicitanteNome).toBe('[dados removidos a pedido do titular]');
+    expect(linha.cep).toBeNull();
+    expect(linha.bairro).not.toBeNull(); // bairro é mantido para estatística
+
+    const fotos = await testPrisma.requestPhoto.count({ where: { requestId: demanda.id } });
+    expect(fotos).toBe(0);
+  }, 30000); // Neon real via rede.
+
+  it('retorna 404 para um id inexistente', async () => {
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998025');
+
+    const res = await request(app)
+      .patch('/demandas/11111111-1111-1111-1111-111111111111/anonimizar')
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(404);
+  }, 30000); // Neon real via rede.
+});
+
+describe('GET /demandas — busca por telefone', () => {
+  it('chefe encontra a demanda buscando pelo telefone digitado com máscara', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998026');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998027');
+
+    // camposBase() usa '(34) 99999-0000' como solicitanteTelefone (com máscara) — o backend
+    // precisa normalizar antes de filtrar, senão isto nunca bate contra o valor persistido.
+    const res = await request(app)
+      .get('/demandas')
+      .query({ solicitanteTelefone: '(34) 99999-0000' })
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.some((item: { id: string }) => item.id === demanda.id)).toBe(true);
   }, 30000); // Neon real via rede.
 });

@@ -99,6 +99,8 @@ export type HistoricoStatusResultado =
   | { status: 'nao_encontrada' }
   | { status: 'sem_permissao' };
 
+export type AnonimizarResultado = { status: 'ok' } | { status: 'nao_encontrada' };
+
 export class RequestService {
   private requestRepo: RequestRepository;
   private requestTypeRepo: RequestTypeRepository;
@@ -226,8 +228,15 @@ export class RequestService {
     paginacao: Paginacao,
     usuario: UsuarioAutenticado,
   ): Promise<{ items: RequestSummary[]; total: number }> {
+    // O telefone gravado no banco está sempre normalizado (E.164) — sem normalizar o filtro
+    // aqui também, uma busca por "(34) 99999-1234" nunca bateria contra "+5534999991234".
+    const filtroComTelefoneNormalizado: ListarFiltro = filtro.solicitanteTelefone
+      ? { ...filtro, solicitanteTelefone: normalizePhone(filtro.solicitanteTelefone) }
+      : filtro;
     const filtroEfetivo: ListarFiltro =
-      usuario.role === 'ASSESSOR_RUA' ? { ...filtro, assessorResponsavelId: usuario.id } : filtro;
+      usuario.role === 'ASSESSOR_RUA'
+        ? { ...filtroComTelefoneNormalizado, assessorResponsavelId: usuario.id }
+        : filtroComTelefoneNormalizado;
     return this.requestRepo.list(filtroEfetivo, paginacao);
   }
 
@@ -346,5 +355,25 @@ export class RequestService {
 
     const atualizado = await this.requestRepo.reatribuir(id, novoAssessorId, reatribuidoPorId);
     return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
+  }
+
+  async anonimizar(id: string, atorId: string, ip?: string): Promise<AnonimizarResultado> {
+    const demanda = await this.requestRepo.findById(id);
+    if (!demanda) return { status: 'nao_encontrada' };
+
+    const { publicIds } = await this.requestRepo.anonimizar(id);
+    for (const publicId of publicIds) {
+      await this.photoUploader.delete(publicId);
+    }
+
+    await this.auditLogRepo.record({
+      actorUserId: atorId,
+      acao: 'ANONIMIZAR_DEMANDA',
+      entidade: 'Request',
+      entidadeId: id,
+      ip,
+    });
+
+    return { status: 'ok' };
   }
 }

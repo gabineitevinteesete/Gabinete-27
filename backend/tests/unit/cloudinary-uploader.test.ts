@@ -21,7 +21,7 @@ vi.mock('cloudinary', () => {
     v2: {
       config: vi.fn(),
       url,
-      uploader: { upload_stream: uploadStream },
+      uploader: { upload_stream: uploadStream, destroy: vi.fn().mockResolvedValue({ result: 'ok' }) },
     },
   };
 });
@@ -65,5 +65,16 @@ describe('createCloudinaryUploader', () => {
     expect(opcoes.sign_url).toBe(true);
     expect(opcoes.type).toBe('authenticated');
     expect(opcoes.secure).toBe(true);
+  });
+
+  it('exclui a foto do Cloudinary com os mesmos parâmetros do upload (authenticated)', async () => {
+    const uploader = createCloudinaryUploader({ cloudName: 'demo', apiKey: 'key', apiSecret: 'secret' });
+
+    await uploader.delete('demandas/abc123');
+
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith('demandas/abc123', {
+      resource_type: 'image',
+      type: 'authenticated',
+    });
   });
 });

@@ -17,6 +17,13 @@ export interface PhotoUploader {
    * depender de um valor antigo, mas o link em si continua válido se vazar.
    */
   urlAssinada(publicId: string): string;
+
+  /**
+   * Remove a foto do Cloudinary de vez. Usa os mesmos parâmetros do upload (`resource_type`,
+   * `type: 'authenticated'`) — sem eles o Cloudinary não localiza o asset, já que ele nunca
+   * foi enviado como público.
+   */
+  delete(publicId: string): Promise<void>;
 }
 
 export function createCloudinaryUploader(config: {
@@ -58,6 +65,10 @@ export function createCloudinaryUploader(config: {
         sign_url: true,
         secure: true,
       });
+    },
+
+    async delete(publicId) {
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'image', type: 'authenticated' });
     },
   };
 }
