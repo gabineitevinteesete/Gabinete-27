@@ -53,7 +53,7 @@ export function createApp(prisma: PrismaClient, deps?: { photoUploader?: PhotoUp
       apiKey: env.CLOUDINARY_API_KEY,
       apiSecret: env.CLOUDINARY_API_SECRET,
     });
-  const requestService = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo });
+  const requestService = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
 
   const internalNoteRepo = createInternalNoteRepository(prisma);
   const internalNoteService = new InternalNoteService({ internalNoteRepo, requestRepo });
