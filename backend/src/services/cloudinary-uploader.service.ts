@@ -68,7 +68,13 @@ export function createCloudinaryUploader(config: {
     },
 
     async delete(publicId) {
-      await cloudinary.uploader.destroy(publicId, { resource_type: 'image', type: 'authenticated' });
+      const resultado = await cloudinary.uploader.destroy(publicId, {
+        resource_type: 'image',
+        type: 'authenticated',
+      });
+      if (resultado.result !== 'ok') {
+        console.error(`Falha ao excluir foto do Cloudinary (publicId: ${publicId}): resultado "${resultado.result}"`);
+      }
     },
   };
 }

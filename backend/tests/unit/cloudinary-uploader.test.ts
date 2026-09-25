@@ -77,4 +77,15 @@ describe('createCloudinaryUploader', () => {
       type: 'authenticated',
     });
   });
+
+  it('registra um erro quando o Cloudinary não confirma a exclusão', async () => {
+    vi.mocked(cloudinary.uploader.destroy).mockResolvedValueOnce({ result: 'not found' });
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const uploader = createCloudinaryUploader({ cloudName: 'demo', apiKey: 'key', apiSecret: 'secret' });
+
+    await uploader.delete('demandas/inexistente');
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('demandas/inexistente'));
+    consoleErrorSpy.mockRestore();
+  });
 });

@@ -497,7 +497,23 @@ describe('PATCH /demandas/:id/anonimizar', () => {
   it('chefe anonimiza a demanda: campos identificáveis somem, fotos são excluídas', async () => {
     const tipo = await criarTipo();
     const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998023');
-    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+    const criado = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${tokenRua}`)
+      .field({
+        ...camposBase(tipo.id),
+        cep: '38400-000',
+        rua: 'Rua das Flores',
+        numero: '100',
+        complemento: 'Apto 1',
+        pontoReferencia: 'Perto da praça',
+        solicitanteNascimento: '1990-01-01',
+      })
+      .attach('fotos', foto1, 'foto1.jpg')
+      .attach('fotos', foto2, 'foto2.jpg');
+    const demanda = criado.body.data as { id: string };
     const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998024');
 
     const res = await request(app)
@@ -507,9 +523,25 @@ describe('PATCH /demandas/:id/anonimizar', () => {
     expect(res.status).toBe(200);
 
     const linha = await testPrisma.request.findUniqueOrThrow({ where: { id: demanda.id } });
+    // Campos apagados: texto genérico para os obrigatórios, null para os opcionais.
     expect(linha.solicitanteNome).toBe('[dados removidos a pedido do titular]');
+    expect(linha.solicitanteTelefone).toBe('[dados removidos a pedido do titular]');
+    expect(linha.descricao).toBe('[dados removidos a pedido do titular]');
+    expect(linha.solicitanteNascimento).toBeNull();
     expect(linha.cep).toBeNull();
-    expect(linha.bairro).not.toBeNull(); // bairro é mantido para estatística
+    expect(linha.rua).toBeNull();
+    expect(linha.numero).toBeNull();
+    expect(linha.complemento).toBeNull();
+    expect(linha.pontoReferencia).toBeNull();
+    expect(linha.localExato).toBeNull();
+    // Campos mantidos: histórico/estatística intactos. camposBase() não preenche cidade/estado,
+    // então eles nascem null — a asserção aqui só prova que a anonimização não mexeu neles.
+    expect(linha.bairro).toBe('Centro');
+    expect(linha.cidade).toBeNull();
+    expect(linha.estado).toBeNull();
+    expect(linha.tituloResumido).not.toBeNull();
+    expect(linha.status).toBeDefined();
+    expect(linha.codigoInterno).not.toBeNull();
 
     const fotos = await testPrisma.requestPhoto.count({ where: { requestId: demanda.id } });
     expect(fotos).toBe(0);
