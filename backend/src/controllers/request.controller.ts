@@ -103,5 +103,12 @@ export function createRequestController(requestService: RequestService) {
       if (resultado.status === 'assessor_invalido') throw new HttpError(400, 'Assessor inválido ou inativo');
       res.json({ success: true, data: resultado.demanda });
     },
+
+    async anonimizar(req: Request, res: Response) {
+      const { id } = demandaIdParamsSchema.parse(req.params);
+      const resultado = await requestService.anonimizar(id, req.user!.id, getClientIp(req));
+      if (resultado.status === 'nao_encontrada') throw new HttpError(404, 'Demanda não encontrada');
+      res.json({ success: true, data: { status: 'ok' } });
+    },
   };
 }

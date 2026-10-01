@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RequestService } from '../../src/services/request.service.js';
 import { createFakeRequestTypeRepo, createFakeRequestRepo, createFakePhotoUploader, createFakeUserRepo, createFakeAuditLogRepo } from '../helpers/fakes.js';
 import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
+import { TEXTO_DADOS_REMOVIDOS } from '../../src/repositories/request.repository.js';
 
 function buildService() {
   const requestTypeRepo = createFakeRequestTypeRepo([
@@ -14,7 +15,7 @@ function buildService() {
   ]);
   const auditLogRepo = createFakeAuditLogRepo();
   const service = new RequestService({ requestRepo, requestTypeRepo, photoUploader, userRepo, auditLogRepo });
-  return { service, requestRepo, userRepo, auditLogRepo };
+  return { service, requestRepo, userRepo, auditLogRepo, photoUploader };
 }
 
 async function criarDemandaFake(requestRepo: ReturnType<typeof createFakeRequestRepo>, assessorId: string, status = 'ENVIADA') {
@@ -429,5 +430,31 @@ describe('RequestService.reatribuir', () => {
       expect(resultado.demanda.assessorResponsavelId).toBe(atual.id);
     }
     expect(requestRepo.historicoReatribuicao).toHaveLength(0);
+  });
+});
+
+describe('RequestService.anonimizar', () => {
+  it('anonimiza os campos identificáveis, exclui as fotos do Cloudinary e grava auditoria', async () => {
+    const { service, requestRepo, auditLogRepo, photoUploader } = buildService();
+    const demanda = await criarDemandaFake(requestRepo, 'user-eu');
+
+    const resultado = await service.anonimizar(demanda.id, 'gabinete-1');
+
+    expect(resultado.status).toBe('ok');
+    const atualizada = await requestRepo.findById(demanda.id);
+    expect(atualizada?.solicitanteNome).toBe(TEXTO_DADOS_REMOVIDOS);
+    expect(atualizada?.solicitanteTelefone).toBe(TEXTO_DADOS_REMOVIDOS);
+    expect(atualizada?.cep).toBeNull();
+    expect(atualizada?.fotos).toHaveLength(0);
+    expect(photoUploader.deleted.length).toBeGreaterThan(0);
+    expect(auditLogRepo.records).toContainEqual(
+      expect.objectContaining({ actorUserId: 'gabinete-1', acao: 'ANONIMIZAR_DEMANDA', entidade: 'Request', entidadeId: demanda.id }),
+    );
+  });
+
+  it('retorna nao_encontrada para um id inexistente', async () => {
+    const { service } = buildService();
+    const resultado = await service.anonimizar('id-que-nao-existe', 'gabinete-1');
+    expect(resultado.status).toBe('nao_encontrada');
   });
 });

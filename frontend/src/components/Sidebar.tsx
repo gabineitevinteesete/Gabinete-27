@@ -16,6 +16,7 @@ const ITENS: ItemMenu[] = [
   { href: '/painel/dashboard', label: 'Dashboard', somenteChefe: true },
   { href: '/painel/assessores', label: 'Assessores', somenteChefe: true },
   { href: '/painel/configuracoes', label: 'Configurações', somenteChefe: true },
+  { href: '/painel/privacidade', label: 'Privacidade', somenteChefe: true },
 ];
 
 export function Sidebar({ role }: { role: UserRoleValue }) {

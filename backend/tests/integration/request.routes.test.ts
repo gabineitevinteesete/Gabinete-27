@@ -41,6 +41,7 @@ function camposBase(tipoId: string) {
   return {
     solicitanteNome: 'Maria Solicitante',
     solicitanteTelefone: '(34) 99999-0000',
+    bairro: 'Centro',
     localExato: 'Em frente ao 100',
     tituloResumido: 'Buraco na rua',
     descricao: 'Buraco grande',
@@ -477,5 +478,101 @@ describe('PATCH /demandas/:id/reatribuir', () => {
       .send({ novoAssessorId: outroChefe.id });
 
     expect(res.status).toBe(400);
+  }, 30000); // Neon real via rede.
+});
+
+describe('PATCH /demandas/:id/anonimizar', () => {
+  it('bloqueia quem não é chefe com 403', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998022');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/anonimizar`)
+      .set('Authorization', `Bearer ${tokenRua}`);
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('chefe anonimiza a demanda: campos identificáveis somem, fotos são excluídas', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998023');
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+    const criado = await request(app)
+      .post('/demandas')
+      .set('Authorization', `Bearer ${tokenRua}`)
+      .field({
+        ...camposBase(tipo.id),
+        cep: '38400-000',
+        rua: 'Rua das Flores',
+        numero: '100',
+        complemento: 'Apto 1',
+        pontoReferencia: 'Perto da praça',
+        solicitanteNascimento: '1990-01-01',
+      })
+      .attach('fotos', foto1, 'foto1.jpg')
+      .attach('fotos', foto2, 'foto2.jpg');
+    const demanda = criado.body.data as { id: string };
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998024');
+
+    const res = await request(app)
+      .patch(`/demandas/${demanda.id}/anonimizar`)
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(200);
+
+    const linha = await testPrisma.request.findUniqueOrThrow({ where: { id: demanda.id } });
+    // Campos apagados: texto genérico para os obrigatórios, null para os opcionais.
+    expect(linha.solicitanteNome).toBe('[dados removidos a pedido do titular]');
+    expect(linha.solicitanteTelefone).toBe('[dados removidos a pedido do titular]');
+    expect(linha.descricao).toBe('[dados removidos a pedido do titular]');
+    expect(linha.solicitanteNascimento).toBeNull();
+    expect(linha.cep).toBeNull();
+    expect(linha.rua).toBeNull();
+    expect(linha.numero).toBeNull();
+    expect(linha.complemento).toBeNull();
+    expect(linha.pontoReferencia).toBeNull();
+    expect(linha.localExato).toBeNull();
+    // Campos mantidos: histórico/estatística intactos. camposBase() não preenche cidade/estado,
+    // então eles nascem null — a asserção aqui só prova que a anonimização não mexeu neles.
+    expect(linha.bairro).toBe('Centro');
+    expect(linha.cidade).toBeNull();
+    expect(linha.estado).toBeNull();
+    expect(linha.tituloResumido).not.toBeNull();
+    expect(linha.status).toBeDefined();
+    expect(linha.codigoInterno).not.toBeNull();
+
+    const fotos = await testPrisma.requestPhoto.count({ where: { requestId: demanda.id } });
+    expect(fotos).toBe(0);
+  }, 30000); // Neon real via rede.
+
+  it('retorna 404 para um id inexistente', async () => {
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998025');
+
+    const res = await request(app)
+      .patch('/demandas/11111111-1111-1111-1111-111111111111/anonimizar')
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(404);
+  }, 30000); // Neon real via rede.
+});
+
+describe('GET /demandas — busca por telefone', () => {
+  it('chefe encontra a demanda buscando pelo telefone digitado com máscara', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998026');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998027');
+
+    // camposBase() usa '(34) 99999-0000' como solicitanteTelefone (com máscara) — o backend
+    // precisa normalizar antes de filtrar, senão isto nunca bate contra o valor persistido.
+    const res = await request(app)
+      .get('/demandas')
+      .query({ solicitanteTelefone: '(34) 99999-0000' })
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.some((item: { id: string }) => item.id === demanda.id)).toBe(true);
   }, 30000); // Neon real via rede.
 });

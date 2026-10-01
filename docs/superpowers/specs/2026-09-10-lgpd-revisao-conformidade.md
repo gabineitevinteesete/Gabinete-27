@@ -46,6 +46,8 @@ A LGPD garante ao cidadão o direito de, a qualquer momento, pedir para: (a) sab
 
 **Recomendação:** não precisa ser um autoatendimento sofisticado — como o volume de demandas é relativamente pequeno e passa sempre por um assessor humano, pode ser um processo simples: um jeito do chefe (que já tem acesso total) localizar todas as demandas de um cidadão por telefone e decidir entre anonimizar ou excluir. O importante é que *exista* um caminho, documentado, mesmo que operado manualmente por enquanto.
 
+**Atualização — implementado (docs/superpowers/specs/2026-09-25-anonimizacao-cidadao-design.md):** o chefe agora tem, em `/painel/privacidade`, um jeito de buscar as demandas de um cidadão por telefone e anonimizar os dados (nome, telefone, endereço, data de nascimento, descrição e fotos — incluindo excluir as fotos do Cloudinary). **Limitação conhecida:** dois campos de texto livre continuam intactos depois da anonimização — `tituloResumido` (o título da demanda, digitado pelo assessor ao criar, ex: "Poste queimado na casa da dona Maria") e `InternalNote.texto` (observações internas da equipe). Nenhum dos dois é validado ou limitado a conteúdo neutro, então um assessor pode, em teoria, escrever algo que identifique o cidadão em qualquer um dos dois. Essa foi uma decisão de design deliberada — apagar o título destruiria a legibilidade do histórico operacional que a anonimização existe para preservar (um título genérico em vez de "Buraco na rua" torna o histórico de atendimentos ilegível). Registro aqui para que a conformidade alegada corresponda à realidade: uma anonimização a 100% exigiria também mascarar esses dois campos, ou orientar a equipe a nunca incluir nome/endereço/telefone do cidadão neles.
+
 ---
 
 ## 3. Retenção e descarte de dados

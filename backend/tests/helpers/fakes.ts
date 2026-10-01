@@ -5,13 +5,14 @@ import type { AuditLogRepository } from '../../src/repositories/audit-log.reposi
 import type { UserRoleValue } from '../../src/utils/jwt.js';
 import type { PhotoUploader, FotoEnviada } from '../../src/services/cloudinary-uploader.service.js';
 import type { RequestTypeRepository, RequestTypeSummary } from '../../src/repositories/request-type.repository.js';
-import type {
-  RequestRepository,
-  RequestDetail,
-  CriarRequestInput,
-  FotoParaSalvar,
-  ListarFiltro,
-  Paginacao,
+import {
+  TEXTO_DADOS_REMOVIDOS,
+  type RequestRepository,
+  type RequestDetail,
+  type CriarRequestInput,
+  type FotoParaSalvar,
+  type ListarFiltro,
+  type Paginacao,
 } from '../../src/repositories/request.repository.js';
 import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../../src/utils/request-status.js';
 import { randomUUID } from 'node:crypto';
@@ -146,11 +147,14 @@ export function createFakeAuditLogRepo(): AuditLogRepository & { records: unknow
 
 export function createFakePhotoUploader(): PhotoUploader & {
   uploads: { buffer: Buffer; contentType: string; folder: string }[];
+  deleted: string[];
 } {
   const uploads: { buffer: Buffer; contentType: string; folder: string }[] = [];
+  const deleted: string[] = [];
   let contador = 0;
   return {
     uploads,
+    deleted,
     async upload(input) {
       uploads.push(input);
       contador += 1;
@@ -164,6 +168,9 @@ export function createFakePhotoUploader(): PhotoUploader & {
     // uma URL reconhecivelmente "assinada" para provar que a API não devolve a url do banco.
     urlAssinada(publicId) {
       return `https://res.cloudinary.com/fake/image/authenticated/s--fakesig--/${publicId}`;
+    },
+    async delete(publicId) {
+      deleted.push(publicId);
     },
   };
 }
@@ -346,6 +353,24 @@ export function createFakeRequestRepo(): RequestRepository & {
       });
       existente.assessorResponsavelId = novoAssessorId;
       return existente;
+    },
+    async anonimizar(id) {
+      const existente = store.find((r) => r.id === id);
+      if (!existente) throw new Error('Request não encontrada (fake)');
+      const publicIds = existente.fotos.map((f) => f.publicId);
+      existente.solicitanteNome = TEXTO_DADOS_REMOVIDOS;
+      existente.solicitanteTelefone = TEXTO_DADOS_REMOVIDOS;
+      existente.solicitanteNascimento = null;
+      existente.cep = null;
+      existente.rua = null;
+      existente.numero = null;
+      existente.complemento = null;
+      existente.pontoReferencia = null;
+      existente.localExato = null;
+      existente.descricao = TEXTO_DADOS_REMOVIDOS;
+      existente.descricaoOutroAssunto = null;
+      existente.fotos = [];
+      return { publicIds };
     },
   };
 }
