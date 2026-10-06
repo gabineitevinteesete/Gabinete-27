@@ -241,3 +241,117 @@ describe('DemandasPage — filtros novos', () => {
     await waitFor(() => expect(ultimaUrl()).not.toContain('status='));
   });
 });
+
+describe('DemandasPage — robustez dos filtros', () => {
+  it('não dispara uma requisição por tecla no filtro de código', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+
+    const campo = screen.getByLabelText('Código');
+    fireEvent.change(campo, { target: { value: 'G' } });
+    fireEvent.change(campo, { target: { value: 'GD' } });
+    fireEvent.change(campo, { target: { value: 'GD-1' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(urlDaChamada(1)).toContain('codigoInterno=GD-1');
+  });
+
+  it('digitar em campo de texto estando na página 2 faz uma única busca, já na página 1', async () => {
+    mockApi({ items: [itemFake()], total: 45, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    fireEvent.click(await screen.findByText('Próxima'));
+    await waitFor(() => expect(ultimaUrl()).toContain('pagina=2'));
+    const antes = chamadasDemandas().length;
+
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'GD-9' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(antes + 1));
+    expect(ultimaUrl()).toContain('pagina=1');
+    expect(ultimaUrl()).toContain('codigoInterno=GD-9');
+  });
+
+  it('ignora espaços nas pontas do texto digitado', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('Nome do solicitante'), { target: { value: ' Maria ' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(new URLSearchParams(urlDaChamada(1).split('?')[1]).get('solicitanteNome')).toBe('Maria');
+  });
+
+  it('ignora data incompleta ou inválida sem quebrar a página', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('De'), { target: { value: '20266-10-01' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(ultimaUrl()).not.toContain('dataInicial=');
+    expect(screen.getByText('Nova demanda')).toBeInTheDocument();
+  });
+
+  it('"Limpar filtros" limpa todos os campos, volta à página 1 e mantém o assessor da URL', async () => {
+    const paramsOriginais = window.location.search;
+    window.history.replaceState({}, '', '/painel/demandas?assessorResponsavelId=assessor-123');
+    mockApi({ items: [itemFake()], total: 45, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    fireEvent.click(await screen.findByText('Próxima'));
+    await waitFor(() => expect(ultimaUrl()).toContain('pagina=2'));
+
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'GD-1' } });
+    fireEvent.change(screen.getByLabelText('Nome do solicitante'), { target: { value: 'Maria' } });
+    fireEvent.change(screen.getByLabelText('Bairro'), { target: { value: 'Centro' } });
+    fireEvent.change(screen.getByLabelText('Tipo de demanda'), { target: { value: 'tipo-1' } });
+    fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-10-01' } });
+    await waitFor(() => expect(ultimaUrl()).toContain('codigoInterno=GD-1'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+
+    expect(screen.getByLabelText('Código')).toHaveValue('');
+    expect(screen.getByLabelText('Nome do solicitante')).toHaveValue('');
+    expect(screen.getByLabelText('Bairro')).toHaveValue('');
+    expect(screen.getByLabelText('Tipo de demanda')).toHaveValue('');
+    expect(screen.getByLabelText('De')).toHaveValue('');
+    await waitFor(() => {
+      const params = new URLSearchParams(ultimaUrl().split('?')[1]);
+      expect(params.get('pagina')).toBe('1');
+      expect(params.get('assessorResponsavelId')).toBe('assessor-123');
+      ['codigoInterno', 'solicitanteNome', 'bairro', 'requestTypeId', 'dataInicial'].forEach((chave) =>
+        expect(params.has(chave)).toBe(false),
+      );
+    });
+
+    window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
+  });
+
+  it('ignora a resposta de uma busca antiga que chega depois da mais nova', async () => {
+    let resolverAntiga: (valor: unknown) => void = () => {};
+    vi.mocked(apiClient.request).mockImplementation(((url: string) => {
+      if (url.startsWith('/tipos-demanda')) return Promise.resolve([tipoFake]);
+      if (url.includes('status=RECEBIDA')) {
+        return Promise.resolve({ items: [itemFake({ tituloResumido: 'Resposta nova' })], total: 1, pagina: 1, tamanhoPagina: 20 });
+      }
+      return new Promise((resolve) => (resolverAntiga = resolve));
+    }) as unknown as typeof apiClient.request);
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+    expect(await screen.findByText('Resposta nova')).toBeInTheDocument();
+
+    resolverAntiga({ items: [itemFake({ tituloResumido: 'Resposta antiga' })], total: 1, pagina: 1, tamanhoPagina: 20 });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(screen.queryByText('Resposta antiga')).not.toBeInTheDocument();
+    expect(screen.getByText('Resposta nova')).toBeInTheDocument();
+  });
+});

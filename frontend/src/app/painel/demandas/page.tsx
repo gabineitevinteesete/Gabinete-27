@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { apiClient } from '@/services/api-client';
@@ -17,13 +17,25 @@ interface ListaDemandasResposta {
 }
 
 // Debounce dos campos de texto: sem isto cada tecla digitada virava uma requisição à API.
-function useDebounced<T>(valor: T, ms: number): T {
+// `aoMudar` roda junto com a atualização do valor aplicado, para a página só voltar a 1
+// quando o texto de fato entra na busca (e não a cada tecla, o que geraria uma busca extra).
+function useDebounced(valor: string, ms: number, aoMudar: () => void): string {
   const [debounced, setDebounced] = useState(valor);
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(valor), ms);
+    if (valor === debounced) return;
+    const timer = setTimeout(() => {
+      setDebounced(valor);
+      aoMudar();
+    }, ms);
     return () => clearTimeout(timer);
-  }, [valor, ms]);
+  }, [valor, debounced, ms, aoMudar]);
   return debounced;
+}
+
+// Data digitada incompleta ou absurda (ex.: ano com 5 dígitos) vira null em vez de quebrar a página.
+function inicioOuFimDoDia(data: string, fim: boolean): string | null {
+  const d = new Date(`${data}T${fim ? '23:59:59.999' : '00:00:00'}`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 const CLASSE_CAMPO =
@@ -50,9 +62,10 @@ export default function DemandasPage() {
   const [carregando, setCarregando] = useState(true);
   const tamanhoPagina = 20;
 
-  const bairroBuscado = useDebounced(bairro, DEBOUNCE_MS);
-  const codigoBuscado = useDebounced(codigo, DEBOUNCE_MS);
-  const nomeBuscado = useDebounced(nome, DEBOUNCE_MS);
+  const voltarParaPrimeiraPagina = useCallback(() => setPagina(1), []);
+  const bairroBuscado = useDebounced(bairro.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
+  const codigoBuscado = useDebounced(codigo.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
+  const nomeBuscado = useDebounced(nome.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
 
   useEffect(() => {
     apiClient
@@ -62,32 +75,43 @@ export default function DemandasPage() {
   }, []);
 
   useEffect(() => {
+    // Ignora respostas de buscas antigas que cheguem depois de uma mais nova.
+    let ativo = true;
     setCarregando(true);
     const params = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: String(tamanhoPagina) });
     if (bairroBuscado) params.set('bairro', bairroBuscado);
-    if (codigoBuscado.trim()) params.set('codigoInterno', codigoBuscado.trim());
-    if (nomeBuscado.trim()) params.set('solicitanteNome', nomeBuscado.trim());
+    if (codigoBuscado) params.set('codigoInterno', codigoBuscado);
+    if (nomeBuscado) params.set('solicitanteNome', nomeBuscado);
     if (tipoId) params.set('requestTypeId', tipoId);
     if (status) params.set('status', status);
-    if (de) params.set('dataInicial', new Date(`${de}T00:00:00`).toISOString());
-    if (ate) params.set('dataFinal', new Date(`${ate}T23:59:59.999`).toISOString());
+    const dataInicial = de ? inicioOuFimDoDia(de, false) : null;
+    const dataFinal = ate ? inicioOuFimDoDia(ate, true) : null;
+    if (dataInicial) params.set('dataInicial', dataInicial);
+    if (dataFinal) params.set('dataFinal', dataFinal);
     if (assessorResponsavelId) params.set('assessorResponsavelId', assessorResponsavelId);
 
     apiClient
       .request<ListaDemandasResposta>(`/demandas?${params.toString()}`, { auth: true })
       .then((resposta) => {
+        if (!ativo) return;
         setItens(resposta.items);
         setTotal(resposta.total);
       })
       .catch(() => {
+        if (!ativo) return;
         setItens([]);
         setTotal(0);
       })
-      .finally(() => setCarregando(false));
+      .finally(() => {
+        if (ativo) setCarregando(false);
+      });
+    return () => {
+      ativo = false;
+    };
   }, [pagina, bairroBuscado, codigoBuscado, nomeBuscado, tipoId, status, de, ate, assessorResponsavelId]);
 
   const totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
-  const filtrosAtivos = Boolean(bairro || codigo || nome || tipoId || status || de || ate);
+  const filtrosAtivos = Boolean(bairro.trim() || codigo.trim() || nome.trim() || tipoId || status || de || ate);
 
   function alterar(setter: (valor: string) => void) {
     return (valor: string) => {
@@ -127,7 +151,7 @@ export default function DemandasPage() {
           <input
             id="filtro-codigo"
             value={codigo}
-            onChange={(e) => alterar(setCodigo)(e.target.value)}
+            onChange={(e) => setCodigo(e.target.value)}
             className={CLASSE_CAMPO}
           />
         </div>
@@ -139,7 +163,7 @@ export default function DemandasPage() {
           <input
             id="filtro-nome"
             value={nome}
-            onChange={(e) => alterar(setNome)(e.target.value)}
+            onChange={(e) => setNome(e.target.value)}
             className={CLASSE_CAMPO}
           />
         </div>
@@ -151,7 +175,7 @@ export default function DemandasPage() {
           <input
             id="filtro-bairro"
             value={bairro}
-            onChange={(e) => alterar(setBairro)(e.target.value)}
+            onChange={(e) => setBairro(e.target.value)}
             className={CLASSE_CAMPO}
           />
         </div>
