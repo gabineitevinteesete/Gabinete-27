@@ -105,3 +105,130 @@ describe('BuscaCidadao', () => {
     expect(await screen.findByText('Demanda não encontrada')).toBeInTheDocument();
   });
 });
+
+describe('BuscaCidadao — total e botões travados', () => {
+  const demandaDois = {
+    ...demandaFake,
+    id: 'd2',
+    solicitanteNome: 'João Solicitante',
+    tituloResumido: 'Poste queimado',
+  };
+
+  async function buscarTelefone() {
+    fireEvent.change(screen.getByLabelText('Telefone do cidadão'), { target: { value: '34999991234' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+  }
+
+  it('avisa quando o total é maior que os resultados exibidos', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [demandaFake, demandaDois], total: 37 });
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+
+    expect(
+      await screen.findByText('Mostrando 2 de 37 demandas. Anonimize estas e busque de novo para ver as demais.'),
+    ).toBeInTheDocument();
+  });
+
+  it('não mostra o aviso quando o total é igual aos resultados exibidos', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [demandaFake, demandaDois], total: 2 });
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+    await screen.findByText('Buraco na rua');
+
+    expect(screen.queryByText(/Mostrando/)).not.toBeInTheDocument();
+  });
+
+  it('decrementa o total depois de anonimizar uma demanda', async () => {
+    confirmSpy.mockReturnValue(true);
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ items: [demandaFake, demandaDois], total: 3 })
+      .mockResolvedValueOnce({ status: 'ok' });
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+    await screen.findByText('Mostrando 2 de 3 demandas. Anonimize estas e busque de novo para ver as demais.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anonimizar dados de Maria Solicitante' }));
+
+    expect(
+      await screen.findByText('Mostrando 1 de 2 demandas. Anonimize estas e busque de novo para ver as demais.'),
+    ).toBeInTheDocument();
+  });
+
+  it('desabilita os botões das outras linhas enquanto uma anonimização está em andamento', async () => {
+    confirmSpy.mockReturnValue(true);
+    let resolverAnonimizacao: (valor: unknown) => void = () => {};
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ items: [demandaFake, demandaDois], total: 2 })
+      .mockImplementationOnce(() => new Promise((resolve) => (resolverAnonimizacao = resolve)));
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+    await screen.findByText('Buraco na rua');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anonimizar dados de Maria Solicitante' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Anonimizar dados de João Solicitante' })).toBeDisabled(),
+    );
+
+    resolverAnonimizacao({ status: 'ok' });
+    await waitFor(() => expect(screen.queryByText('Buraco na rua')).not.toBeInTheDocument());
+  });
+
+  it('avisa quantas demandas restam quando todas as linhas exibidas foram anonimizadas', async () => {
+    confirmSpy.mockReturnValue(true);
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ items: [demandaFake], total: 3 })
+      .mockResolvedValueOnce({ status: 'ok' });
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+    await screen.findByText('Buraco na rua');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anonimizar dados de Maria Solicitante' }));
+
+    expect(
+      await screen.findByText('Restam 2 demandas deste telefone. Busque de novo para vê-las.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Nenhuma demanda encontrada para este telefone.')).not.toBeInTheDocument();
+  });
+
+  it('mostra "nenhuma demanda encontrada" ao anonimizar a única demanda do telefone', async () => {
+    confirmSpy.mockReturnValue(true);
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ items: [demandaFake], total: 1 })
+      .mockResolvedValueOnce({ status: 'ok' });
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+    await screen.findByText('Buraco na rua');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anonimizar dados de Maria Solicitante' }));
+
+    expect(await screen.findByText('Nenhuma demanda encontrada para este telefone.')).toBeInTheDocument();
+    expect(screen.queryByText(/Restam/)).not.toBeInTheDocument();
+  });
+
+  it('desabilita o botão Buscar enquanto uma anonimização está em andamento', async () => {
+    confirmSpy.mockReturnValue(true);
+    let resolverAnonimizacao: (valor: unknown) => void = () => {};
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ items: [demandaFake], total: 1 })
+      .mockImplementationOnce(() => new Promise((resolve) => (resolverAnonimizacao = resolve)));
+
+    render(<BuscaCidadao />);
+    await buscarTelefone();
+    await screen.findByText('Buraco na rua');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anonimizar dados de Maria Solicitante' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeDisabled());
+
+    resolverAnonimizacao({ status: 'ok' });
+    await waitFor(() => expect(screen.queryByText('Buraco na rua')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+  });
+});

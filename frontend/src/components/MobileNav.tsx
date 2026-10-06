@@ -15,6 +15,7 @@ const ITENS: ItemMenu[] = [
   { href: '/painel/escala', label: 'Escala' },
   { href: '/painel/dashboard', label: 'Dashboard', somenteChefe: true },
   { href: '/painel/assessores', label: 'Equipe', somenteChefe: true },
+  { href: '/painel/mais', label: 'Mais', somenteChefe: true },
 ];
 
 export function MobileNav({ role }: { role: UserRoleValue }) {
@@ -23,11 +24,11 @@ export function MobileNav({ role }: { role: UserRoleValue }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 flex justify-around border-t border-gray-200 bg-white py-2 md:hidden">
       {itensVisiveis.map((item) => (
-        <a key={item.href} href={item.href} className="px-3 py-2 text-sm text-primary-dark">
+        <a key={item.href} href={item.href} className="px-1 py-2 text-xs text-primary-dark">
           {item.label}
         </a>
       ))}
-      <BotaoSair className="px-3 py-2 text-sm text-primary-dark disabled:opacity-60" />
+      <BotaoSair className="px-1 py-2 text-xs text-primary-dark disabled:opacity-60" />
     </nav>
   );
 }

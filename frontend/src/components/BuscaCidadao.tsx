@@ -15,6 +15,7 @@ interface ListaDemandasResposta {
 export function BuscaCidadao() {
   const [telefone, setTelefone] = useState('');
   const [resultados, setResultados] = useState<DemandaResumo[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [anonimizandoId, setAnonimizandoId] = useState<string | null>(null);
@@ -32,9 +33,11 @@ export function BuscaCidadao() {
         auth: true,
       });
       setResultados(resposta.items);
+      setTotal(resposta.total);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível buscar. Tente novamente.');
       setResultados(null);
+      setTotal(0);
     } finally {
       setBuscando(false);
     }
@@ -50,6 +53,7 @@ export function BuscaCidadao() {
     try {
       await apiClient.request(`/demandas/${demanda.id}/anonimizar`, { method: 'PATCH', auth: true });
       setResultados((prev) => prev?.filter((d) => d.id !== demanda.id) ?? null);
+      setTotal((prev) => Math.max(0, prev - 1));
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível anonimizar. Tente novamente.');
     } finally {
@@ -69,15 +73,27 @@ export function BuscaCidadao() {
             onChange={(e) => setTelefone(e.target.value)}
           />
         </div>
-        <Button type="submit" disabled={!telefoneValido || buscando} className="w-fit">
+        <Button type="submit" disabled={!telefoneValido || buscando || anonimizandoId !== null} className="w-fit">
           {buscando ? 'Buscando…' : 'Buscar'}
         </Button>
       </form>
 
       {erro && <p className="text-sm text-red-600">{erro}</p>}
 
-      {resultados !== null && resultados.length === 0 && (
+      {resultados !== null && resultados.length === 0 && total === 0 && (
         <p className="text-sm text-gray-500">Nenhuma demanda encontrada para este telefone.</p>
+      )}
+
+      {resultados !== null && resultados.length === 0 && total > 0 && (
+        <p className="text-sm text-gray-500">
+          Restam {total} demandas deste telefone. Busque de novo para vê-las.
+        </p>
+      )}
+
+      {resultados !== null && resultados.length > 0 && total > resultados.length && (
+        <p className="text-sm text-gray-600">
+          Mostrando {resultados.length} de {total} demandas. Anonimize estas e busque de novo para ver as demais.
+        </p>
       )}
 
       {resultados !== null && resultados.length > 0 && (
@@ -103,7 +119,7 @@ export function BuscaCidadao() {
                     <button
                       type="button"
                       onClick={() => anonimizar(demanda)}
-                      disabled={anonimizandoId === demanda.id}
+                      disabled={anonimizandoId !== null}
                       aria-label={`Anonimizar dados de ${demanda.solicitanteNome}`}
                       className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
                     >
