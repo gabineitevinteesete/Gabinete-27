@@ -15,6 +15,7 @@ interface ListaDemandasResposta {
 export function BuscaCidadao() {
   const [telefone, setTelefone] = useState('');
   const [resultados, setResultados] = useState<DemandaResumo[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [anonimizandoId, setAnonimizandoId] = useState<string | null>(null);
@@ -32,9 +33,11 @@ export function BuscaCidadao() {
         auth: true,
       });
       setResultados(resposta.items);
+      setTotal(resposta.total);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível buscar. Tente novamente.');
       setResultados(null);
+      setTotal(0);
     } finally {
       setBuscando(false);
     }
@@ -50,6 +53,7 @@ export function BuscaCidadao() {
     try {
       await apiClient.request(`/demandas/${demanda.id}/anonimizar`, { method: 'PATCH', auth: true });
       setResultados((prev) => prev?.filter((d) => d.id !== demanda.id) ?? null);
+      setTotal((prev) => Math.max(0, prev - 1));
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível anonimizar. Tente novamente.');
     } finally {
@@ -80,6 +84,12 @@ export function BuscaCidadao() {
         <p className="text-sm text-gray-500">Nenhuma demanda encontrada para este telefone.</p>
       )}
 
+      {resultados !== null && resultados.length > 0 && total > resultados.length && (
+        <p className="text-sm text-gray-600">
+          Mostrando {resultados.length} de {total} demandas. Anonimize estas e busque de novo para ver as demais.
+        </p>
+      )}
+
       {resultados !== null && resultados.length > 0 && (
         <div className="overflow-x-auto rounded-card bg-white shadow-sm">
           <table className="w-full text-left text-sm">
@@ -103,7 +113,7 @@ export function BuscaCidadao() {
                     <button
                       type="button"
                       onClick={() => anonimizar(demanda)}
-                      disabled={anonimizandoId === demanda.id}
+                      disabled={anonimizandoId !== null}
                       aria-label={`Anonimizar dados de ${demanda.solicitanteNome}`}
                       className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
                     >
