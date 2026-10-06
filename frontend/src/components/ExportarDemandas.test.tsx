@@ -45,7 +45,7 @@ describe('ExportarDemandas', () => {
 
     await waitFor(() => expect(nomeBaixado).toMatch(/^demandas-\d{4}-\d{2}-\d{2}\.csv$/));
     expect(apiClient.requestBlob).toHaveBeenCalledWith('/demandas/exportar?status=RECEBIDA&bairro=Centro', { auth: true });
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake');
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake'));
   });
 
   it('sem filtros chama a rota sem query string', async () => {
@@ -69,6 +69,12 @@ describe('ExportarDemandas', () => {
 
     resolver(new Blob(['x']));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Exportar planilha' })).toBeEnabled());
+  });
+
+  it('fica desabilitado quando a lista ainda não refletiu os filtros digitados', () => {
+    render(<ExportarDemandas filtros="" desabilitado />);
+
+    expect(screen.getByRole('button', { name: 'Exportar planilha' })).toBeDisabled();
   });
 
   it('mostra a mensagem do backend quando a exportação falha', async () => {

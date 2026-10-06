@@ -46,6 +46,21 @@ async function criarDemanda(
 }
 
 describe('RequestService.exportar', () => {
+  it('formata "Criada em" no fuso de São Paulo e neutraliza fórmula em texto livre', async () => {
+    const { service, requestRepo } = buildService();
+    // 02:00Z em 8/out ainda é 23:00 de 7/out em São Paulo (UTC-3).
+    const demanda = await criarDemanda(requestRepo, { solicitanteNome: '=HYPERLINK("x")' });
+    (demanda as { createdAt: Date }).createdAt = new Date('2026-10-08T02:00:00.000Z');
+
+    const resultado = await service.exportar({}, 'chefe-1');
+
+    expect(resultado.status).toBe('ok');
+    if (resultado.status !== 'ok') return;
+    const linha = resultado.csv.replace('\uFEFF', '').trim().split('\r\n')[1]!;
+    expect(linha.endsWith(';07/10/2026')).toBe(true);
+    expect(linha).toContain('"\'=HYPERLINK(""x"")"');
+  });
+
   it('gera o CSV com cabeçalho e uma linha por demanda, sem telefone nem descrição', async () => {
     const { service, requestRepo } = buildService();
     await criarDemanda(requestRepo);

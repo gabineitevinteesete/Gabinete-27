@@ -11,8 +11,9 @@ function dataLocal(): string {
   return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
-// `filtros` é a query string dos filtros aplicados na lista (sem paginação).
-export function ExportarDemandas({ filtros }: { filtros: string }) {
+// `filtros` é a query string dos filtros aplicados na lista (sem paginação). `desabilitado` trava o
+// botão enquanto a lista ainda não refletiu o que está digitado, para a planilha não sair com filtro velho.
+export function ExportarDemandas({ filtros, desabilitado = false }: { filtros: string; desabilitado?: boolean }) {
   const { user } = useAuth();
   const [exportando, setExportando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -31,7 +32,8 @@ export function ExportarDemandas({ filtros }: { filtros: string }) {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      // Adiado: alguns navegadores cancelam o download se a URL for revogada logo após o clique.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível exportar. Tente novamente.');
     } finally {
@@ -44,7 +46,7 @@ export function ExportarDemandas({ filtros }: { filtros: string }) {
       <button
         type="button"
         onClick={exportar}
-        disabled={exportando}
+        disabled={exportando || desabilitado}
         className="w-fit rounded-xl border border-primary px-4 py-2 text-sm font-medium text-primary-dark hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
       >
         {exportando ? 'Exportando…' : 'Exportar planilha'}

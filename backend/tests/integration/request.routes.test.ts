@@ -586,10 +586,13 @@ describe('GET /demandas/exportar', () => {
 
   it('bloqueia quem não é chefe com 403', async () => {
     const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998031');
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998036');
 
-    const res = await request(app).get('/demandas/exportar').set('Authorization', `Bearer ${tokenGabinete}`);
+    const resGabinete = await request(app).get('/demandas/exportar').set('Authorization', `Bearer ${tokenGabinete}`);
+    const resRua = await request(app).get('/demandas/exportar').set('Authorization', `Bearer ${tokenRua}`);
 
-    expect(res.status).toBe(403);
+    expect(resGabinete.status).toBe(403);
+    expect(resRua.status).toBe(403);
   }, 30000); // Neon real via rede.
 
   it('chefe baixa o CSV filtrado, sem telefone, e a exportação fica auditada', async () => {
@@ -612,6 +615,9 @@ describe('GET /demandas/exportar', () => {
     expect(res.text).toContain('Maria Solicitante');
     expect(res.text).not.toContain('99999-0000');
     expect(res.text).not.toContain('+5534999990000');
+    expect(res.text).not.toContain('Em frente ao 100');
+    expect(res.text).not.toContain('Buraco grande');
+    expect(res.headers['cache-control']).toBe('no-store');
 
     const auditoria = await testPrisma.auditLog.findMany({ where: { acao: 'EXPORTAR_DEMANDAS' } });
     expect(auditoria).toHaveLength(1);
@@ -631,5 +637,8 @@ describe('GET /demandas/exportar', () => {
 
     expect(res.status).toBe(200);
     expect(res.text.trim().split('\r\n')).toHaveLength(1);
+
+    const auditoria = await testPrisma.auditLog.findMany({ where: { acao: 'EXPORTAR_DEMANDAS' } });
+    expect(auditoria[0]!.detalhes).toEqual({ quantidade: 0 });
   }, 30000); // Neon real via rede.
 });

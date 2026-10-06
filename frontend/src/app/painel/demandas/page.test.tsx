@@ -20,7 +20,9 @@ import { apiClient } from '@/services/api-client';
 
 // O botão de exportar tem testes próprios; aqui só interessa a query string que a página lhe entrega.
 vi.mock('@/components/ExportarDemandas', () => ({
-  ExportarDemandas: ({ filtros }: { filtros: string }) => <span data-testid="exportar" data-filtros={filtros} />,
+  ExportarDemandas: ({ filtros, desabilitado }: { filtros: string; desabilitado?: boolean }) => (
+    <span data-testid="exportar" data-filtros={filtros} data-desabilitado={String(Boolean(desabilitado))} />
+  ),
 }));
 
 function itemFake(overrides: Record<string, unknown> = {}) {
@@ -386,5 +388,18 @@ describe('DemandasPage — exportação', () => {
       expect(params.has('pagina')).toBe(false);
       expect(params.has('tamanhoPagina')).toBe(false);
     });
+  });
+
+  it('desabilita a exportação enquanto o texto digitado ainda não foi aplicado', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'false'));
+
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'GD-7' } });
+    expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'true');
+
+    await waitFor(() => expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'false'));
+    expect(screen.getByTestId('exportar')).toHaveAttribute('data-filtros', 'codigoInterno=GD-7');
   });
 });

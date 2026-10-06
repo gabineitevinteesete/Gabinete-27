@@ -96,6 +96,10 @@ export default function DemandasPage() {
   const codigoBuscado = useDebounced(codigo.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
   const nomeBuscado = useDebounced(nome.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
 
+  // Texto digitado que ainda está no debounce: a lista (e a exportação) ainda usam o valor antigo.
+  const filtrosDeTextoPendentes =
+    bairro.trim() !== bairroBuscado || codigo.trim() !== codigoBuscado || nome.trim() !== nomeBuscado;
+
   const filtros = montarFiltros({
     bairro: bairroBuscado,
     codigo: codigoBuscado,
@@ -173,7 +177,7 @@ export default function DemandasPage() {
         </Link>
       </div>
 
-      <ExportarDemandas filtros={filtros} />
+      <ExportarDemandas filtros={filtros} desabilitado={carregando || filtrosDeTextoPendentes} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
         <div>

@@ -58,6 +58,7 @@ export function createRequestController(requestService: RequestService) {
       // en-CA formata como AAAA-MM-DD.
       const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
       res.setHeader('Content-Disposition', `attachment; filename="demandas-${hoje}.csv"`);
       res.send(resultado.csv);
     },
