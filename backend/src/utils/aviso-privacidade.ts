@@ -16,7 +16,7 @@ Para que usamos: exclusivamente para registrar, acompanhar e responder à sua so
 
 Quem tem acesso: a equipe do gabinete responsável por atender e encaminhar solicitações. As fotos ficam armazenadas em um serviço de nuvem (Cloudinary), protegidas contra acesso externo.
 
-Por quanto tempo guardamos: enquanto for necessário para o acompanhamento da sua solicitação. Ainda não temos um prazo automático de exclusão definido — isso está em avaliação.
+Por quanto tempo guardamos: não há prazo automático de exclusão. Seus dados ficam guardados até o gabinete decidir apagá-los ou torná-los anônimos, e você pode pedir isso a qualquer momento (veja "Seus direitos" abaixo).
 
 Seus direitos: a qualquer momento você pode pedir para saber quais dados temos sobre você, corrigi-los ou solicitar a exclusão. Basta falar com o assessor ou assessora que fez seu atendimento.
 
