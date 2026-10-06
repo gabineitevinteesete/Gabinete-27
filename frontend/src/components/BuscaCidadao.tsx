@@ -73,15 +73,21 @@ export function BuscaCidadao() {
             onChange={(e) => setTelefone(e.target.value)}
           />
         </div>
-        <Button type="submit" disabled={!telefoneValido || buscando} className="w-fit">
+        <Button type="submit" disabled={!telefoneValido || buscando || anonimizandoId !== null} className="w-fit">
           {buscando ? 'Buscando…' : 'Buscar'}
         </Button>
       </form>
 
       {erro && <p className="text-sm text-red-600">{erro}</p>}
 
-      {resultados !== null && resultados.length === 0 && (
+      {resultados !== null && resultados.length === 0 && total === 0 && (
         <p className="text-sm text-gray-500">Nenhuma demanda encontrada para este telefone.</p>
+      )}
+
+      {resultados !== null && resultados.length === 0 && total > 0 && (
+        <p className="text-sm text-gray-500">
+          Restam {total} demandas deste telefone. Busque de novo para vê-las.
+        </p>
       )}
 
       {resultados !== null && resultados.length > 0 && total > resultados.length && (
