@@ -27,15 +27,36 @@ function itemFake(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const tipoFake = { id: 'tipo-1', nome: 'Tapa-buraco', exigeDescricaoObrigatoria: false };
+const RESPOSTA_VAZIA = { items: [], total: 0, pagina: 1, tamanhoPagina: 20 };
+
+// A página faz uma chamada a /tipos-demanda ao montar; o mock responde por URL para que os
+// testes contem só as chamadas a /demandas.
+function mockApi(respostaDemandas: unknown = RESPOSTA_VAZIA) {
+  vi.mocked(apiClient.request).mockImplementation((async (url: string) =>
+    url.startsWith('/tipos-demanda') ? [tipoFake] : respostaDemandas) as unknown as typeof apiClient.request);
+}
+
+function chamadasDemandas() {
+  return vi.mocked(apiClient.request).mock.calls.filter(([url]) => String(url).startsWith('/demandas'));
+}
+
+function urlDaChamada(indice: number) {
+  return String(chamadasDemandas()[indice]![0]);
+}
+
+function ultimaUrl() {
+  const chamadas = chamadasDemandas();
+  return String(chamadas[chamadas.length - 1]![0]);
+}
+
 beforeEach(() => {
   vi.mocked(apiClient.request).mockReset();
 });
 
 describe('DemandasPage', () => {
   it('lista as demandas retornadas pela API', async () => {
-    vi.mocked(apiClient.request).mockResolvedValueOnce({
-      items: [itemFake()], total: 1, pagina: 1, tamanhoPagina: 20,
-    });
+    mockApi({ items: [itemFake()], total: 1, pagina: 1, tamanhoPagina: 20 });
 
     render(<DemandasPage />);
 
@@ -44,24 +65,23 @@ describe('DemandasPage', () => {
   });
 
   it('refaz a busca quando o filtro de bairro muda', async () => {
-    vi.mocked(apiClient.request).mockResolvedValue({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
 
     fireEvent.change(screen.getByLabelText(/bairro/i), { target: { value: 'Centro' } });
 
     // O filtro é debounced (350ms), então a busca não sai no mesmo tick da digitação.
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
-    const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
-    expect(url).toContain('bairro=Centro');
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(urlDaChamada(1)).toContain('bairro=Centro');
   });
 
   it('não dispara uma requisição por tecla digitada no filtro de bairro', async () => {
-    vi.mocked(apiClient.request).mockResolvedValue({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
 
     const campo = screen.getByLabelText(/bairro/i);
     fireEvent.change(campo, { target: { value: 'C' } });
@@ -69,13 +89,12 @@ describe('DemandasPage', () => {
     fireEvent.change(campo, { target: { value: 'Cen' } });
     fireEvent.change(campo, { target: { value: 'Centro' } });
 
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
-    const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
-    expect(url).toContain('bairro=Centro');
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(urlDaChamada(1)).toContain('bairro=Centro');
   });
 
   it('mostra mensagem quando não há demandas', async () => {
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
 
@@ -83,29 +102,26 @@ describe('DemandasPage', () => {
   });
 
   it('refaz a busca quando o filtro de status muda', async () => {
-    vi.mocked(apiClient.request).mockResolvedValue({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
 
     fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
 
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(2));
-    const [url] = vi.mocked(apiClient.request).mock.calls[1]!;
-    expect(url).toContain('status=RECEBIDA');
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(urlDaChamada(1)).toContain('status=RECEBIDA');
   });
 
   it('lê assessorResponsavelId da URL de entrada e aplica no filtro', async () => {
     const paramsOriginais = window.location.search;
     window.history.replaceState({}, '', '/painel/demandas?assessorResponsavelId=assessor-123');
-
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
 
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
-    const [url] = vi.mocked(apiClient.request).mock.calls[0]!;
-    expect(url).toContain('assessorResponsavelId=assessor-123');
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+    expect(urlDaChamada(0)).toContain('assessorResponsavelId=assessor-123');
 
     window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
   });
@@ -113,14 +129,12 @@ describe('DemandasPage', () => {
   it('lê status da URL de entrada e aplica no primeiro fetch', async () => {
     const paramsOriginais = window.location.search;
     window.history.replaceState({}, '', '/painel/demandas?status=RECEBIDA');
-
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
 
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
-    const [url] = vi.mocked(apiClient.request).mock.calls[0]!;
-    expect(url).toContain('status=RECEBIDA');
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+    expect(urlDaChamada(0)).toContain('status=RECEBIDA');
 
     window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
   });
@@ -128,15 +142,102 @@ describe('DemandasPage', () => {
   it('lê bairro da URL de entrada e aplica no primeiro fetch', async () => {
     const paramsOriginais = window.location.search;
     window.history.replaceState({}, '', '/painel/demandas?bairro=Centro');
-
-    vi.mocked(apiClient.request).mockResolvedValueOnce({ items: [], total: 0, pagina: 1, tamanhoPagina: 20 });
+    mockApi();
 
     render(<DemandasPage />);
 
-    await waitFor(() => expect(apiClient.request).toHaveBeenCalledTimes(1));
-    const [url] = vi.mocked(apiClient.request).mock.calls[0]!;
-    expect(url).toContain('bairro=Centro');
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+    expect(urlDaChamada(0)).toContain('bairro=Centro');
 
     window.history.replaceState({}, '', `/painel/demandas${paramsOriginais}`);
+  });
+});
+
+describe('DemandasPage — filtros novos', () => {
+  it('filtra por código', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'GD-2026' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(urlDaChamada(1)).toContain('codigoInterno=GD-2026');
+  });
+
+  it('filtra pelo nome do solicitante', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('Nome do solicitante'), { target: { value: 'Maria' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(urlDaChamada(1)).toContain('solicitanteNome=Maria');
+  });
+
+  it('filtra por tipo de demanda, com as opções vindas de /tipos-demanda', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    expect(await screen.findByRole('option', { name: 'Tapa-buraco' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tipo de demanda'), { target: { value: 'tipo-1' } });
+
+    await waitFor(() => expect(ultimaUrl()).toContain('requestTypeId=tipo-1'));
+  });
+
+  it('filtra por período e o "Até" cobre o dia local inteiro', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2026-10-31' } });
+
+    await waitFor(() => {
+      const url = ultimaUrl();
+      expect(url).toContain('dataInicial=');
+      expect(url).toContain('dataFinal=');
+    });
+
+    const params = new URLSearchParams(ultimaUrl().split('?')[1]);
+    const inicio = new Date(params.get('dataInicial')!);
+    const fim = new Date(params.get('dataFinal')!);
+    expect([inicio.getDate(), inicio.getHours(), inicio.getMinutes()]).toEqual([1, 0, 0]);
+    expect([fim.getDate(), fim.getHours(), fim.getMinutes()]).toEqual([31, 23, 59]);
+  });
+
+  it('volta para a página 1 ao mudar um filtro', async () => {
+    mockApi({ items: [itemFake()], total: 45, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    fireEvent.click(await screen.findByText('Próxima'));
+    await waitFor(() => expect(ultimaUrl()).toContain('pagina=2'));
+
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+
+    await waitFor(() => {
+      expect(ultimaUrl()).toContain('pagina=1');
+      expect(ultimaUrl()).toContain('status=RECEBIDA');
+    });
+  });
+
+  it('mostra "Limpar filtros" só com filtro ativo e limpa tudo ao clicar', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Limpar filtros' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Limpar filtros' }));
+
+    expect(screen.getByLabelText(/status/i)).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Limpar filtros' })).not.toBeInTheDocument();
+    await waitFor(() => expect(ultimaUrl()).not.toContain('status='));
   });
 });
