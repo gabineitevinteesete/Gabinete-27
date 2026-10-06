@@ -15,6 +15,7 @@ const ITENS: ItemMenu[] = [
   { href: '/painel/escala', label: 'Escala' },
   { href: '/painel/dashboard', label: 'Dashboard', somenteChefe: true },
   { href: '/painel/assessores', label: 'Equipe', somenteChefe: true },
+  { href: '/painel/mais', label: 'Mais', somenteChefe: true },
 ];
 
 export function MobileNav({ role }: { role: UserRoleValue }) {
