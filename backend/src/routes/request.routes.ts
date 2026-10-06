@@ -44,6 +44,8 @@ export function createRequestRouter(deps: {
 
   router.post('/', auth, upload.array('fotos', 4), asyncHandler(controller.criar));
   router.get('/', auth, asyncHandler(controller.listar));
+  // Antes de '/:id', senão 'exportar' seria lido como um id.
+  router.get('/exportar', auth, requireRole('CHEFE'), asyncHandler(controller.exportar));
   router.get('/:id', auth, asyncHandler(controller.buscarPorId));
   router.patch('/:id', auth, asyncHandler(controller.editar));
   router.patch('/:id/status', auth, requireRole('ASSESSOR_GABINETE', 'CHEFE'), asyncHandler(controller.mudarStatus));

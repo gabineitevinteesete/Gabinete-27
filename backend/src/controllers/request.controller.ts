@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import type { RequestService } from '../services/request.service.js';
-import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../validators/request.validators.js';
+import { LIMITE_EXPORTACAO, type RequestService } from '../services/request.service.js';
+import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, exportarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../validators/request.validators.js';
 import { HttpError } from '../middlewares/error-handler.js';
 import { getClientIp } from '../utils/request-ip.js';
 
@@ -47,6 +47,19 @@ export function createRequestController(requestService: RequestService) {
         success: true,
         data: { items: resultado.items, total: resultado.total, pagina, tamanhoPagina },
       });
+    },
+
+    async exportar(req: Request, res: Response) {
+      const filtro = exportarDemandasQuerySchema.parse(req.query);
+      const resultado = await requestService.exportar(filtro, req.user!.id, getClientIp(req));
+      if (resultado.status === 'limite_excedido') {
+        throw new HttpError(400, `Muitos resultados (${resultado.total}). O limite é de ${LIMITE_EXPORTACAO} linhas; refine os filtros.`);
+      }
+      // en-CA formata como AAAA-MM-DD.
+      const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="demandas-${hoje}.csv"`);
+      res.send(resultado.csv);
     },
 
     async buscarPorId(req: Request, res: Response) {

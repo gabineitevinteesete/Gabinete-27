@@ -73,3 +73,5 @@ export const mudarStatusSchema = z.object({
 export const reatribuirSchema = z.object({
   novoAssessorId: z.string().uuid(),
 });
+
+export const exportarDemandasQuerySchema = listarDemandasQuerySchema.omit({ pagina: true, tamanhoPagina: true });

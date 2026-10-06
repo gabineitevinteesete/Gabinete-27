@@ -576,3 +576,60 @@ describe('GET /demandas — busca por telefone', () => {
     expect(res.body.data.items.some((item: { id: string }) => item.id === demanda.id)).toBe(true);
   }, 30000); // Neon real via rede.
 });
+
+describe('GET /demandas/exportar', () => {
+  it('exige autenticação', async () => {
+    const res = await request(app).get('/demandas/exportar');
+
+    expect(res.status).toBe(401);
+  }, 30000); // Neon real via rede.
+
+  it('bloqueia quem não é chefe com 403', async () => {
+    const { accessToken: tokenGabinete } = await loginComoAssessor('ASSESSOR_GABINETE', '+5534999998031');
+
+    const res = await request(app).get('/demandas/exportar').set('Authorization', `Bearer ${tokenGabinete}`);
+
+    expect(res.status).toBe(403);
+  }, 30000); // Neon real via rede.
+
+  it('chefe baixa o CSV filtrado, sem telefone, e a exportação fica auditada', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998032');
+    const demanda = await criarDemandaViaApi(tipo.id, tokenRua);
+    const linha = await testPrisma.request.findUniqueOrThrow({ where: { id: demanda.id } });
+    const { assessor: chefe, accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998033');
+
+    const res = await request(app)
+      .get('/demandas/exportar')
+      .query({ bairro: 'Centro' })
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="demandas-\d{4}-\d{2}-\d{2}\.csv"/);
+    expect(res.text.startsWith('﻿Código;Título;Tipo;Status;Bairro;Solicitante;Assessor responsável;Criada em')).toBe(true);
+    expect(res.text).toContain(linha.codigoInterno);
+    expect(res.text).toContain('Maria Solicitante');
+    expect(res.text).not.toContain('99999-0000');
+    expect(res.text).not.toContain('+5534999990000');
+
+    const auditoria = await testPrisma.auditLog.findMany({ where: { acao: 'EXPORTAR_DEMANDAS' } });
+    expect(auditoria).toHaveLength(1);
+    expect(auditoria[0]!.actorUserId).toBe(chefe.id);
+  }, 30000); // Neon real via rede.
+
+  it('um filtro que não casa com nada devolve só o cabeçalho', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenRua } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998034');
+    await criarDemandaViaApi(tipo.id, tokenRua);
+    const { accessToken: tokenChefe } = await loginComoAssessor('CHEFE', '+5534999998035');
+
+    const res = await request(app)
+      .get('/demandas/exportar')
+      .query({ bairro: 'Bairro Inexistente' })
+      .set('Authorization', `Bearer ${tokenChefe}`);
+
+    expect(res.status).toBe(200);
+    expect(res.text.trim().split('\r\n')).toHaveLength(1);
+  }, 30000); // Neon real via rede.
+});
