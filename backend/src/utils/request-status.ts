@@ -56,3 +56,17 @@ export class TransicaoConcorrenteError extends Error {
     this.name = 'TransicaoConcorrenteError';
   }
 }
+
+// Mantenha em sincronia com STATUS_LABEL em frontend/src/lib/request-status.ts.
+export const STATUS_ROTULO: Record<RequestStatusValue, string> = {
+  RASCUNHO: 'Rascunho',
+  ENVIADA: 'Enviada',
+  RECEBIDA: 'Recebida',
+  EM_CONFERENCIA: 'Em conferência',
+  PENDENTE_INFORMACAO: 'Pendente de informação',
+  PROTOCOLADA: 'Protocolada',
+  EM_ANDAMENTO: 'Em andamento',
+  CONCLUIDA: 'Concluída',
+  ARQUIVADA: 'Arquivada',
+  RECUSADA: 'Recusada',
+};

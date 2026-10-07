@@ -84,3 +84,56 @@ describe('apiClient.request', () => {
     expect(init.headers['Content-Type']).toBeUndefined();
   });
 });
+
+describe('apiClient.requestBlob', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+    apiClient.setAccessToken(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('devolve o blob da resposta, enviando o access token', async () => {
+    apiClient.setAccessToken('token-abc');
+    const blob = new Blob(['a;b']);
+    (fetch as any).mockResolvedValueOnce({ ok: true, status: 200, blob: async () => blob });
+
+    const resultado = await apiClient.requestBlob('/demandas/exportar', { auth: true });
+
+    expect(resultado).toBe(blob);
+    const [, init] = (fetch as any).mock.calls[0];
+    expect(init.headers.Authorization).toBe('Bearer token-abc');
+    expect(init.credentials).toBe('include');
+  });
+
+  it('renova o token uma vez após 401 e repete a chamada', async () => {
+    apiClient.setAccessToken('token-expirado');
+    const blob = new Blob(['a;b']);
+    (fetch as any)
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'expirado' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ success: true, data: { accessToken: 'token-novo' } }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, blob: async () => blob });
+
+    const resultado = await apiClient.requestBlob('/demandas/exportar', { auth: true });
+
+    expect(resultado).toBe(blob);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    const [, initFinal] = (fetch as any).mock.calls[2];
+    expect(initFinal.headers.Authorization).toBe('Bearer token-novo');
+  });
+
+  it('lança ApiError com a mensagem do backend quando a resposta não é ok', async () => {
+    (fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ success: false, error: 'Muitos resultados' }),
+    });
+
+    await expect(apiClient.requestBlob('/demandas/exportar', { auth: true })).rejects.toMatchObject({
+      status: 400,
+      message: 'Muitos resultados',
+    });
+  });
+});

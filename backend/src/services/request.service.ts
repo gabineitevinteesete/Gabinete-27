@@ -14,10 +14,12 @@ import type { HistoricoStatusItem } from '../repositories/request.repository.js'
 import type { AuditLogRepository } from '../repositories/audit-log.repository.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
+import { gerarCsv } from '../utils/csv.js';
 import {
   transicaoValida,
   exigeMotivo,
   podeEditarComoAssessorDeRua,
+  STATUS_ROTULO,
   TransicaoConcorrenteError,
   type RequestStatusValue,
 } from '../utils/request-status.js';
@@ -64,6 +66,16 @@ export type CriarDemandaResultado =
   | { status: 'quantidade_fotos_invalida' }
   | { status: 'foto_invalida'; indice: number }
   | { status: 'autorizacao_obrigatoria' };
+
+export const LIMITE_EXPORTACAO = 5000;
+
+const CABECALHO_EXPORTACAO = ['Código', 'Título', 'Tipo', 'Status', 'Bairro', 'Solicitante', 'Assessor responsável', 'Criada em'];
+
+const formatarDataBr = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+export type ExportarDemandasResultado =
+  | { status: 'ok'; csv: string; quantidade: number }
+  | { status: 'limite_excedido'; total: number };
 
 export interface UsuarioAutenticado {
   id: string;
@@ -238,6 +250,47 @@ export class RequestService {
         ? { ...filtroComTelefoneNormalizado, assessorResponsavelId: usuario.id }
         : filtroComTelefoneNormalizado;
     return this.requestRepo.list(filtroEfetivo, paginacao);
+  }
+
+  // Só o chefe chega aqui (a rota exige o papel). Telefone, endereço e descrição ficam de fora
+  // de propósito: a planilha sai do sistema, então leva só o mínimo para uso gerencial.
+  async exportar(
+    filtro: ListarFiltro,
+    atorId: string,
+    ip?: string,
+    limite = LIMITE_EXPORTACAO,
+  ): Promise<ExportarDemandasResultado> {
+    const { items, total } = await this.listar(
+      filtro,
+      { pagina: 1, tamanhoPagina: limite },
+      { id: atorId, role: 'CHEFE' },
+    );
+    if (total > limite) return { status: 'limite_excedido', total };
+
+    const csv = gerarCsv(
+      CABECALHO_EXPORTACAO,
+      items.map((d) => [
+        d.codigoInterno,
+        d.tituloResumido,
+        d.requestTypeNome,
+        STATUS_ROTULO[d.status],
+        d.bairro ?? '',
+        d.solicitanteNome,
+        d.assessorResponsavelNome,
+        formatarDataBr.format(d.createdAt),
+      ]),
+    );
+
+    // Os filtros não vão para detalhes: podem conter o nome de um cidadão.
+    await this.auditLogRepo.record({
+      actorUserId: atorId,
+      acao: 'EXPORTAR_DEMANDAS',
+      entidade: 'Request',
+      detalhes: { quantidade: items.length },
+      ip,
+    });
+
+    return { status: 'ok', csv, quantidade: items.length };
   }
 
   async buscarPorId(id: string, usuario: UsuarioAutenticado): Promise<BuscarDemandaResultado> {

@@ -18,6 +18,13 @@ vi.mock('@/services/api-client', async () => {
 });
 import { apiClient } from '@/services/api-client';
 
+// O botão de exportar tem testes próprios; aqui só interessa a query string que a página lhe entrega.
+vi.mock('@/components/ExportarDemandas', () => ({
+  ExportarDemandas: ({ filtros, desabilitado }: { filtros: string; desabilitado?: boolean }) => (
+    <span data-testid="exportar" data-filtros={filtros} data-desabilitado={String(Boolean(desabilitado))} />
+  ),
+}));
+
 function itemFake(overrides: Record<string, unknown> = {}) {
   return {
     id: '1', codigoInterno: 'GD-1', tituloResumido: 'Buraco na rua', solicitanteNome: 'Maria',
@@ -293,9 +300,15 @@ describe('DemandasPage — robustez dos filtros', () => {
 
     fireEvent.change(screen.getByLabelText('De'), { target: { value: '20266-10-01' } });
 
-    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
-    expect(ultimaUrl()).not.toContain('dataInicial=');
+    // Data inválida não entra nos filtros: não há busca nova e a página continua de pé.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(chamadasDemandas()).toHaveLength(1);
     expect(screen.getByText('Nova demanda')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-10-01' } });
+
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(2));
+    expect(ultimaUrl()).toContain('dataInicial=');
   });
 
   it('"Limpar filtros" limpa todos os campos, volta à página 1 e mantém o assessor da URL', async () => {
@@ -353,5 +366,40 @@ describe('DemandasPage — robustez dos filtros', () => {
 
     expect(screen.queryByText('Resposta antiga')).not.toBeInTheDocument();
     expect(screen.getByText('Resposta nova')).toBeInTheDocument();
+  });
+});
+
+describe('DemandasPage — exportação', () => {
+  it('entrega ao botão de exportar os filtros aplicados, sem paginação', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(chamadasDemandas()).toHaveLength(1));
+    expect(screen.getByTestId('exportar')).toHaveAttribute('data-filtros', '');
+
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'GD-7' } });
+
+    await waitFor(() => {
+      const filtros = screen.getByTestId('exportar').getAttribute('data-filtros')!;
+      const params = new URLSearchParams(filtros);
+      expect(params.get('status')).toBe('RECEBIDA');
+      expect(params.get('codigoInterno')).toBe('GD-7');
+      expect(params.has('pagina')).toBe(false);
+      expect(params.has('tamanhoPagina')).toBe(false);
+    });
+  });
+
+  it('desabilita a exportação enquanto o texto digitado ainda não foi aplicado', async () => {
+    mockApi();
+
+    render(<DemandasPage />);
+    await waitFor(() => expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'false'));
+
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'GD-7' } });
+    expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'true');
+
+    await waitFor(() => expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'false'));
+    expect(screen.getByTestId('exportar')).toHaveAttribute('data-filtros', 'codigoInterno=GD-7');
   });
 });

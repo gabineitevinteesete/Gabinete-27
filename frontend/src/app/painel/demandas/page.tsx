@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { apiClient } from '@/services/api-client';
 import type { DemandaResumo, TipoDemanda } from '@/types/request';
 import { STATUS_LABEL } from '@/lib/request-status';
+import { ExportarDemandas } from '@/components/ExportarDemandas';
 
 const DEBOUNCE_MS = 350;
 
@@ -38,6 +39,34 @@ function inicioOuFimDoDia(data: string, fim: boolean): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+interface Filtros {
+  bairro: string;
+  codigo: string;
+  nome: string;
+  tipoId: string;
+  status: string;
+  de: string;
+  ate: string;
+  assessorResponsavelId: string;
+}
+
+// Query string dos filtros (sem paginação): usada tanto na listagem quanto na exportação,
+// para a planilha corresponder exatamente ao que está na tela.
+function montarFiltros(f: Filtros): string {
+  const params = new URLSearchParams();
+  if (f.bairro) params.set('bairro', f.bairro);
+  if (f.codigo) params.set('codigoInterno', f.codigo);
+  if (f.nome) params.set('solicitanteNome', f.nome);
+  if (f.tipoId) params.set('requestTypeId', f.tipoId);
+  if (f.status) params.set('status', f.status);
+  const dataInicial = f.de ? inicioOuFimDoDia(f.de, false) : null;
+  const dataFinal = f.ate ? inicioOuFimDoDia(f.ate, true) : null;
+  if (dataInicial) params.set('dataInicial', dataInicial);
+  if (dataFinal) params.set('dataFinal', dataFinal);
+  if (f.assessorResponsavelId) params.set('assessorResponsavelId', f.assessorResponsavelId);
+  return params.toString();
+}
+
 const CLASSE_CAMPO =
   'mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary';
 
@@ -67,6 +96,21 @@ export default function DemandasPage() {
   const codigoBuscado = useDebounced(codigo.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
   const nomeBuscado = useDebounced(nome.trim(), DEBOUNCE_MS, voltarParaPrimeiraPagina);
 
+  // Texto digitado que ainda está no debounce: a lista (e a exportação) ainda usam o valor antigo.
+  const filtrosDeTextoPendentes =
+    bairro.trim() !== bairroBuscado || codigo.trim() !== codigoBuscado || nome.trim() !== nomeBuscado;
+
+  const filtros = montarFiltros({
+    bairro: bairroBuscado,
+    codigo: codigoBuscado,
+    nome: nomeBuscado,
+    tipoId,
+    status,
+    de,
+    ate,
+    assessorResponsavelId,
+  });
+
   useEffect(() => {
     apiClient
       .request<TipoDemanda[]>('/tipos-demanda', { auth: true })
@@ -78,20 +122,10 @@ export default function DemandasPage() {
     // Ignora respostas de buscas antigas que cheguem depois de uma mais nova.
     let ativo = true;
     setCarregando(true);
-    const params = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: String(tamanhoPagina) });
-    if (bairroBuscado) params.set('bairro', bairroBuscado);
-    if (codigoBuscado) params.set('codigoInterno', codigoBuscado);
-    if (nomeBuscado) params.set('solicitanteNome', nomeBuscado);
-    if (tipoId) params.set('requestTypeId', tipoId);
-    if (status) params.set('status', status);
-    const dataInicial = de ? inicioOuFimDoDia(de, false) : null;
-    const dataFinal = ate ? inicioOuFimDoDia(ate, true) : null;
-    if (dataInicial) params.set('dataInicial', dataInicial);
-    if (dataFinal) params.set('dataFinal', dataFinal);
-    if (assessorResponsavelId) params.set('assessorResponsavelId', assessorResponsavelId);
+    const paginacao = `pagina=${pagina}&tamanhoPagina=${tamanhoPagina}`;
 
     apiClient
-      .request<ListaDemandasResposta>(`/demandas?${params.toString()}`, { auth: true })
+      .request<ListaDemandasResposta>(`/demandas?${paginacao}${filtros ? `&${filtros}` : ''}`, { auth: true })
       .then((resposta) => {
         if (!ativo) return;
         setItens(resposta.items);
@@ -108,7 +142,7 @@ export default function DemandasPage() {
     return () => {
       ativo = false;
     };
-  }, [pagina, bairroBuscado, codigoBuscado, nomeBuscado, tipoId, status, de, ate, assessorResponsavelId]);
+  }, [pagina, filtros]);
 
   const totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
   const filtrosAtivos = Boolean(bairro.trim() || codigo.trim() || nome.trim() || tipoId || status || de || ate);
@@ -142,6 +176,8 @@ export default function DemandasPage() {
           Nova demanda
         </Link>
       </div>
+
+      <ExportarDemandas filtros={filtros} desabilitado={carregando || filtrosDeTextoPendentes} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
         <div>
