@@ -46,6 +46,21 @@ describe('apiClient.request', () => {
     expect(initFinal.headers.Authorization).toBe('Bearer token-novo');
   });
 
+  it('resposta de erro que não é JSON vira ApiError com o status, não um erro de rede', async () => {
+    (fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    });
+
+    await expect(apiClient.request('/demandas', { auth: false })).rejects.toMatchObject({
+      status: 502,
+      message: 'Erro inesperado',
+    });
+  });
+
   // O POST /auth/logout responde 204 sem corpo: chamar res.json() ali lançava.
   it('não tenta parsear corpo em respostas 204', async () => {
     const json = vi.fn(async () => {

@@ -69,7 +69,15 @@ export const apiClient = {
       return undefined as T;
     }
 
-    const body = await res.json();
+    let body: { error?: string; data?: unknown };
+    try {
+      body = await res.json();
+    } catch (err) {
+      // O servidor respondeu, mas não em JSON (ex.: 502/504/413 de um proxy na frente da API).
+      // Isso NÃO é falta de rede: sem este tratamento viraria SyntaxError e seria confundido com ela.
+      if (!res.ok) throw new ApiError(res.status, 'Erro inesperado');
+      throw err;
+    }
     if (!res.ok) {
       throw new ApiError(res.status, body.error ?? 'Erro inesperado');
     }

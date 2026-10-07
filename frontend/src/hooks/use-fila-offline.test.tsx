@@ -4,6 +4,7 @@ import { useFilaOffline } from './use-fila-offline';
 import type { DemandaPendente } from '@/lib/fila-offline';
 
 const useAuthMock = vi.fn();
+const logout = vi.fn();
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => useAuthMock() }));
 
 const listarPendentes = vi.fn();
@@ -11,6 +12,7 @@ const removerPendente = vi.fn();
 const limparErro = vi.fn();
 vi.mock('@/lib/fila-offline', () => ({
   EVENTO_FILA_MUDOU: 'gd:fila-mudou',
+  escutarOutrasAbas: vi.fn(),
   listarPendentes: (...args: unknown[]) => listarPendentes(...args),
   removerPendente: (...args: unknown[]) => removerPendente(...args),
   limparErro: (...args: unknown[]) => limparErro(...args),
@@ -24,11 +26,12 @@ function pendente(id: string, ultimoErro: string | null = null): DemandaPendente
 }
 
 beforeEach(() => {
-  useAuthMock.mockReturnValue({ user: { id: 'u1' } });
+  logout.mockReset().mockResolvedValue(undefined);
+  useAuthMock.mockReturnValue({ user: { id: 'u1' }, logout });
   listarPendentes.mockReset().mockResolvedValue([]);
   removerPendente.mockReset().mockResolvedValue(undefined);
   limparErro.mockReset().mockResolvedValue(undefined);
-  sincronizarFila.mockReset().mockResolvedValue({ enviadas: 0, recusadas: 0 });
+  sincronizarFila.mockReset().mockResolvedValue({ enviadas: 0, recusadas: 0, sessaoExpirada: false });
 });
 
 afterEach(() => {
@@ -46,8 +49,16 @@ describe('useFilaOffline', () => {
     expect(sincronizarFila).toHaveBeenCalledWith('u1');
   });
 
+  it('quando o servidor diz que a sessão expirou, sai para o login (as demandas continuam guardadas)', async () => {
+    sincronizarFila.mockResolvedValue({ enviadas: 0, recusadas: 0, sessaoExpirada: true });
+
+    renderHook(() => useFilaOffline());
+
+    await waitFor(() => expect(logout).toHaveBeenCalled());
+  });
+
   it('sem usuário não carrega nem envia nada', async () => {
-    useAuthMock.mockReturnValue({ user: null });
+    useAuthMock.mockReturnValue({ user: null, logout });
 
     const { result } = renderHook(() => useFilaOffline());
 

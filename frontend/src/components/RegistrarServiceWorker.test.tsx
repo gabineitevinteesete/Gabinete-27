@@ -36,6 +36,9 @@ describe('RegistrarServiceWorker', () => {
     register.mockRejectedValue(new Error('bloqueado'));
 
     expect(() => render(<RegistrarServiceWorker />)).not.toThrow();
+    // A rejeição é engolida: sem rejeição não tratada e a tentativa de registro aconteceu.
     await Promise.resolve();
+    await Promise.resolve();
+    expect(register).toHaveBeenCalledWith('/sw.js');
   });
 });

@@ -34,7 +34,7 @@ describe('sincronizarFila', () => {
 
     const resultado = await sincronizarFila('u1');
 
-    expect(resultado).toEqual({ enviadas: 2, recusadas: 0 });
+    expect(resultado).toEqual({ enviadas: 2, recusadas: 0, sessaoExpirada: false });
     expect(apiClient.request).toHaveBeenCalledTimes(2);
     expect(vi.mocked(apiClient.request).mock.calls[0]![0]).toBe('/demandas');
     expect(vi.mocked(apiClient.request).mock.calls[0]![1]).toMatchObject({ method: 'POST', auth: true });
@@ -60,7 +60,7 @@ describe('sincronizarFila', () => {
 
     const resultado = await sincronizarFila('u1');
 
-    expect(resultado).toEqual({ enviadas: 1, recusadas: 1 });
+    expect(resultado).toEqual({ enviadas: 1, recusadas: 1, sessaoExpirada: false });
     const restantes = await listarPendentes('u1');
     expect(restantes).toHaveLength(1);
     expect(restantes[0]!.campos.tituloResumido).toBe('Recusada');
@@ -74,11 +74,48 @@ describe('sincronizarFila', () => {
 
     const resultado = await sincronizarFila('u1');
 
-    expect(resultado).toEqual({ enviadas: 0, recusadas: 0 });
+    expect(resultado).toEqual({ enviadas: 0, recusadas: 0, sessaoExpirada: false });
     expect(apiClient.request).toHaveBeenCalledTimes(1);
     const restantes = await listarPendentes('u1');
     expect(restantes).toHaveLength(2);
     expect(restantes.every((item) => item.ultimoErro === null)).toBe(true);
+  });
+
+  it('401 depois de renovar a sessão sinaliza sessão expirada e mantém a demanda', async () => {
+    await adicionarPendente(pendenteBase('u1', 'A'));
+    vi.mocked(apiClient.request).mockRejectedValue(new ApiError(401, 'Sessão expirada'));
+
+    const resultado = await sincronizarFila('u1');
+
+    expect(resultado).toEqual({ enviadas: 0, recusadas: 0, sessaoExpirada: true });
+    const restantes = await listarPendentes('u1');
+    expect(restantes).toHaveLength(1);
+    expect(restantes[0]!.ultimoErro).toBeNull();
+  });
+
+  it('o FormData leva as fotos com o nome foto-N.jpg e os campos de texto', async () => {
+    const foto = new Blob(['x'], { type: 'image/jpeg' });
+    const formData = montarFormData({ campos: { tituloResumido: 'T' }, fotos: [foto, foto] });
+
+    const fotos = formData.getAll('fotos') as File[];
+    expect(fotos.map((f) => f.name)).toEqual(['foto-0.jpg', 'foto-1.jpg']);
+    expect(formData.get('tituloResumido')).toBe('T');
+  });
+
+  it('com outra aba já enviando (trava de Web Locks ocupada), não envia nada', async () => {
+    await adicionarPendente(pendenteBase('u1', 'A'));
+    const original = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: async (_nome: string, _opcoes: unknown, cb: (trava: null) => Promise<void>) => cb(null) },
+    });
+
+    const resultado = await sincronizarFila('u1');
+
+    expect(resultado).toEqual({ enviadas: 0, recusadas: 0, sessaoExpirada: false });
+    expect(apiClient.request).not.toHaveBeenCalled();
+    if (original) Object.defineProperty(navigator, 'locks', original);
+    else Reflect.deleteProperty(navigator, 'locks');
   });
 
   it.each([401, 408, 429, 500, 503])(
@@ -90,7 +127,7 @@ describe('sincronizarFila', () => {
 
       const resultado = await sincronizarFila('u1');
 
-      expect(resultado).toEqual({ enviadas: 0, recusadas: 0 });
+      expect(resultado).toEqual({ enviadas: 0, recusadas: 0, sessaoExpirada: status === 401 });
       expect(apiClient.request).toHaveBeenCalledTimes(1);
       const restantes = await listarPendentes('u1');
       expect(restantes).toHaveLength(2);
@@ -106,7 +143,7 @@ describe('sincronizarFila', () => {
 
     const resultado = await sincronizarFila('u1');
 
-    expect(resultado).toEqual({ enviadas: 0, recusadas: 0 });
+    expect(resultado).toEqual({ enviadas: 0, recusadas: 0, sessaoExpirada: false });
     expect(apiClient.request).not.toHaveBeenCalled();
   });
 
@@ -132,7 +169,7 @@ describe('sincronizarFila', () => {
     liberar({ id: 'novo' });
     await primeira;
 
-    expect(segunda).toEqual({ enviadas: 0, recusadas: 0 });
+    expect(segunda).toEqual({ enviadas: 0, recusadas: 0, sessaoExpirada: false });
     expect(apiClient.request).toHaveBeenCalledTimes(1);
   });
 });

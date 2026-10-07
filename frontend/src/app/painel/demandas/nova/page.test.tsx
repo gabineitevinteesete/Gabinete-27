@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NovaDemandaPage from './page';
 
@@ -35,6 +35,10 @@ vi.mock('@/services/api-client', async () => {
   return { ...actual, apiClient: { ...actual.apiClient, request: vi.fn() } };
 });
 import { apiClient } from '@/services/api-client';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 beforeEach(() => {
   localStorage.clear();
@@ -140,7 +144,7 @@ describe('NovaDemandaPage — sem internet', () => {
   });
 
   it('com o aparelho sem rede, nem tenta enviar: guarda direto', async () => {
-    const onLine = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
     render(<NovaDemandaPage />);
     await preencherCamposObrigatorios();
@@ -150,7 +154,6 @@ describe('NovaDemandaPage — sem internet', () => {
     expect(adicionarPendente).toHaveBeenCalledTimes(1);
     // Só a busca dos tipos de demanda aconteceu; nenhum POST /demandas.
     expect(vi.mocked(apiClient.request).mock.calls.filter(([url]) => url === '/demandas')).toHaveLength(0);
-    onLine.mockRestore();
   });
 
   it('se não conseguir guardar no aparelho, mostra o erro e não perde o formulário', async () => {

@@ -67,8 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         guardarUsuario(me.user);
       } catch (err) {
         // Erro de rede (o servidor não respondeu): segue com o usuário guardado, em modo offline.
-        // Resposta do servidor (ApiError, ex.: 401) significa sessão inválida.
-        const guardado = err instanceof ApiError ? null : lerUsuarioGuardado();
+        // Resposta de recusa do servidor (ApiError 4xx, ex.: 401) significa sessão inválida. Erro 5xx
+        // (backend reiniciando) é indisponibilidade, não sessão inválida.
+        const indisponivel = !(err instanceof ApiError) || err.status >= 500;
+        const guardado = indisponivel ? lerUsuarioGuardado() : null;
         if (guardado) {
           setUser(guardado);
         } else {

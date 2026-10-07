@@ -137,6 +137,16 @@ describe('AuthProvider — abrir o app sem internet', () => {
     expect(localStorage.getItem('gd:usuario')).toBeNull();
   });
 
+  it('erro 5xx do servidor (reiniciando) também mantém o usuário guardado', async () => {
+    localStorage.setItem('gd:usuario', JSON.stringify(USUARIO));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(503, 'Indisponível'));
+
+    renderizar();
+
+    expect(await screen.findByText('autenticado: Ana Assessora')).toBeInTheDocument();
+    expect(localStorage.getItem('gd:usuario')).not.toBeNull();
+  });
+
   it('o logout apaga o resumo guardado', async () => {
     function BotaoLogout() {
       const { logout } = useAuth();

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import {
   EVENTO_FILA_MUDOU,
+  escutarOutrasAbas,
   limparErro,
   listarPendentes,
   removerPendente,
@@ -19,7 +20,7 @@ const INTERVALO_SINCRONIZACAO_MS = 30_000;
  * houver pendentes aguardando.
  */
 export function useFilaOffline() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const usuarioId = user?.id ?? null;
   const [pendentes, setPendentes] = useState<DemandaPendente[]>([]);
   const [sincronizando, setSincronizando] = useState(false);
@@ -41,16 +42,20 @@ export function useFilaOffline() {
     if (!usuarioId) return;
     setSincronizando(true);
     try {
-      await sincronizarFila(usuarioId);
+      const resultado = await sincronizarFila(usuarioId);
+      // Sessão vencida: sem entrar de novo os envios nunca vão passar. As demandas continuam
+      // guardadas no aparelho e saem depois do próximo login.
+      if (resultado?.sessaoExpirada) await logout();
     } catch {
       // A fila continua guardada; a próxima rodada tenta de novo.
     } finally {
       setSincronizando(false);
       await recarregar();
     }
-  }, [usuarioId, recarregar]);
+  }, [usuarioId, recarregar, logout]);
 
   useEffect(() => {
+    escutarOutrasAbas();
     void recarregar();
     if (usuarioId && navigator.onLine !== false) void sincronizarAgora();
   }, [usuarioId, recarregar, sincronizarAgora]);

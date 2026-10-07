@@ -17,9 +17,27 @@ export interface DemandaPendente {
 
 export const EVENTO_FILA_MUDOU = 'gd:fila-mudou';
 
-// Avisa as telas abertas (barra de pendentes, página de pendentes) de que a fila mudou.
+let canal: BroadcastChannel | null = null;
+
+// Canal entre abas/janelas do mesmo aparelho: o evento da janela só alcança a própria aba.
+function obterCanal(): BroadcastChannel | null {
+  if (canal || typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return canal;
+  canal = new BroadcastChannel('gd-fila');
+  canal.onmessage = () => window.dispatchEvent(new Event(EVENTO_FILA_MUDOU));
+  return canal;
+}
+
+// Avisa as telas abertas (barra de pendentes, página de pendentes), nesta e nas outras abas, de
+// que a fila mudou.
 function notificarMudanca(): void {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENTO_FILA_MUDOU));
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(EVENTO_FILA_MUDOU));
+  obterCanal()?.postMessage('mudou');
+}
+
+/** Garante que esta aba também escuta as mudanças feitas pelas outras. */
+export function escutarOutrasAbas(): void {
+  obterCanal();
 }
 
 const NOME_BANCO = 'gabinete-digital';
