@@ -15,6 +15,13 @@ export interface DemandaPendente {
   ultimoErro: string | null;
 }
 
+export const EVENTO_FILA_MUDOU = 'gd:fila-mudou';
+
+// Avisa as telas abertas (barra de pendentes, página de pendentes) de que a fila mudou.
+function notificarMudanca(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENTO_FILA_MUDOU));
+}
+
 const NOME_BANCO = 'gabinete-digital';
 const NOME_STORE = 'demandas-pendentes';
 
@@ -76,6 +83,7 @@ export async function adicionarPendente(entrada: {
     ultimoErro: null,
   };
   await comStore('readwrite', (store) => store.add(pendente));
+  notificarMudanca();
   return pendente;
 }
 
@@ -86,6 +94,7 @@ export async function listarPendentes(usuarioId: string): Promise<DemandaPendent
 
 export async function removerPendente(id: string): Promise<void> {
   await comStore('readwrite', (store) => store.delete(id));
+  notificarMudanca();
 }
 
 async function atualizar(id: string, mudar: (item: DemandaPendente) => DemandaPendente): Promise<void> {
@@ -106,6 +115,7 @@ async function atualizar(id: string, mudar: (item: DemandaPendente) => DemandaPe
   } finally {
     banco.close();
   }
+  notificarMudanca();
 }
 
 export function marcarErro(id: string, mensagem: string): Promise<void> {

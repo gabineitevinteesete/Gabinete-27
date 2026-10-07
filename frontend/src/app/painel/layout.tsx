@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Sidebar } from '@/components/Sidebar';
 import { MobileNav } from '@/components/MobileNav';
+import { BarraPendentes } from '@/components/BarraPendentes';
 
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -23,7 +24,10 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-screen bg-fundo">
       <Sidebar role={user.role} />
-      <main className="flex-1 px-4 py-6 pb-20 md:pb-6">{children}</main>
+      <main className="flex-1 px-4 py-6 pb-20 md:pb-6">
+        <BarraPendentes />
+        {children}
+      </main>
       <MobileNav role={user.role} />
     </div>
   );
