@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#163A82"/>
+  <!-- Fachada simples (frontão, colunas e base), dentro da área segura central para ícone "maskable". -->
+  <polygon points="256,130 372,196 140,196" fill="#FFFFFF"/>
+  <rect x="150" y="212" width="212" height="18" rx="4" fill="#FFFFFF"/>
+  <rect x="164" y="244" width="30" height="110" rx="6" fill="#FFFFFF"/>
+  <rect x="241" y="244" width="30" height="110" rx="6" fill="#FFFFFF"/>
+  <rect x="318" y="244" width="30" height="110" rx="6" fill="#FFFFFF"/>
+  <rect x="140" y="368" width="232" height="22" rx="6" fill="#E94F84"/>
+</svg>
