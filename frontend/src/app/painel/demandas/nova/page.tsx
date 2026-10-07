@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
@@ -9,11 +10,61 @@ import { TipoDemandaChips } from '@/components/TipoDemandaChips';
 import { PhotoUploader, type FotoSelecionada } from '@/components/PhotoUploader';
 import { ModalAvisoPrivacidade } from '@/components/ModalAvisoPrivacidade';
 import { maskPhone } from '@/lib/phone-mask';
+import { useAuth } from '@/hooks/use-auth';
+import { adicionarPendente } from '@/lib/fila-offline';
+import { montarFormData } from '@/lib/sincronizar-fila';
 import { apiClient, ApiError } from '@/services/api-client';
 import type { TipoDemanda } from '@/types/request';
 
+const CHAVE_CACHE_TIPOS = 'gd:tipos-demanda';
+
+// Cópia dos tipos para a tela abrir sem rede (sem eles não dá para escolher o tipo).
+function lerTiposGuardados(): TipoDemanda[] {
+  try {
+    const bruto = localStorage.getItem(CHAVE_CACHE_TIPOS);
+    return bruto ? (JSON.parse(bruto) as TipoDemanda[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function guardarTipos(tipos: TipoDemanda[]): void {
+  try {
+    localStorage.setItem(CHAVE_CACHE_TIPOS, JSON.stringify(tipos));
+  } catch {
+    // Sem armazenamento local: a tela só deixa de funcionar offline.
+  }
+}
+
 export default function NovaDemandaPage() {
+  const [salvoOffline, setSalvoOffline] = useState(false);
+  // Trocar a chave recria o formulário do zero (limpa campos e fotos) depois de guardar offline.
+  const [chave, setChave] = useState(0);
+
+  return (
+    <>
+      {salvoOffline && (
+        <div role="status" className="mx-auto mb-4 max-w-md rounded-xl bg-success-light px-4 py-3 text-sm text-success-dark">
+          Demanda salva no celular. Será enviada quando houver sinal.{' '}
+          <Link href="/painel/demandas/pendentes" className="font-medium underline">
+            Ver pendentes
+          </Link>
+        </div>
+      )}
+      <FormularioNovaDemanda
+        key={chave}
+        onSalvoOffline={() => {
+          setSalvoOffline(true);
+          setChave((atual) => atual + 1);
+        }}
+      />
+    </>
+  );
+}
+
+function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [tipos, setTipos] = useState<TipoDemanda[]>([]);
   const [tipoSelecionadoId, setTipoSelecionadoId] = useState<string | null>(null);
 
@@ -42,8 +93,11 @@ export default function NovaDemandaPage() {
   useEffect(() => {
     apiClient
       .request<TipoDemanda[]>('/tipos-demanda', { auth: true })
-      .then(setTipos)
-      .catch(() => setTipos([]));
+      .then((lista) => {
+        setTipos(lista);
+        guardarTipos(lista);
+      })
+      .catch(() => setTipos(lerTiposGuardados()));
   }, []);
 
   const tipoSelecionado = useMemo(() => tipos.find((t) => t.id === tipoSelecionadoId) ?? null, [tipos, tipoSelecionadoId]);
@@ -70,31 +124,60 @@ export default function NovaDemandaPage() {
     }
 
     setEnviando(true);
-    try {
-      const formData = new FormData();
-      formData.append('solicitanteNome', solicitanteNome);
-      formData.append('solicitanteTelefone', solicitanteTelefone);
-      if (solicitanteNascimento) formData.append('solicitanteNascimento', solicitanteNascimento);
-      if (cep) formData.append('cep', cep);
-      if (rua) formData.append('rua', rua);
-      if (numero) formData.append('numero', numero);
-      if (complemento) formData.append('complemento', complemento);
-      if (bairro) formData.append('bairro', bairro);
-      if (cidade) formData.append('cidade', cidade);
-      if (estado) formData.append('estado', estado);
-      if (pontoReferencia) formData.append('pontoReferencia', pontoReferencia);
-      formData.append('localExato', localExato);
-      formData.append('tituloResumido', tituloResumido);
-      formData.append('descricao', descricao);
-      if (descricaoOutroAssunto) formData.append('descricaoOutroAssunto', descricaoOutroAssunto);
-      formData.append('requestTypeId', tipoSelecionadoId);
-      formData.append('autorizacaoDados', String(autorizacaoDados));
-      fotos.forEach((foto, indice) => formData.append('fotos', foto.blob, `foto-${indice}.jpg`));
+    const campos: Record<string, string> = {
+      solicitanteNome,
+      solicitanteTelefone,
+      localExato,
+      tituloResumido,
+      descricao,
+      requestTypeId: tipoSelecionadoId,
+      autorizacaoDados: String(autorizacaoDados),
+    };
+    const opcionais: Record<string, string> = {
+      solicitanteNascimento,
+      cep,
+      rua,
+      numero,
+      complemento,
+      bairro,
+      cidade,
+      estado,
+      pontoReferencia,
+      descricaoOutroAssunto,
+    };
+    Object.entries(opcionais).forEach(([chave, valor]) => {
+      if (valor) campos[chave] = valor;
+    });
+    const arquivos = fotos.map((foto) => foto.blob);
 
+    async function guardarNoAparelho() {
+      if (!user) {
+        setErro('Sem conexão. Entre novamente para guardar a demanda no aparelho.');
+        return;
+      }
+      try {
+        await adicionarPendente({ usuarioId: user.id, campos, fotos: arquivos });
+        onSalvoOffline();
+      } catch {
+        setErro('Sem conexão e não foi possível guardar a demanda neste aparelho. Tente novamente.');
+      }
+    }
+
+    try {
+      if (navigator.onLine === false) {
+        await guardarNoAparelho();
+        return;
+      }
+      const formData = montarFormData({ campos, fotos: arquivos });
       const demanda = await apiClient.request<{ id: string }>('/demandas', { method: 'POST', body: formData, auth: true });
       router.push(`/painel/demandas/${demanda.id}`);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Não foi possível enviar a demanda. Tente novamente.');
+      if (err instanceof ApiError) {
+        setErro(err.message);
+      } else {
+        // Sem resposta do servidor (sem rede): a demanda fica guardada e sai quando houver sinal.
+        await guardarNoAparelho();
+      }
     } finally {
       setEnviando(false);
     }

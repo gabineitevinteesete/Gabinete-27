@@ -21,6 +21,35 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Resumo do usuário (sem token) para o app abrir sem internet: sem ele, a renovação da sessão
+// falha por falta de rede e o usuário seria mandado para o login mesmo com a sessão válida.
+const CHAVE_USUARIO_GUARDADO = 'gd:usuario';
+
+function lerUsuarioGuardado(): PublicUser | null {
+  try {
+    const bruto = localStorage.getItem(CHAVE_USUARIO_GUARDADO);
+    return bruto ? (JSON.parse(bruto) as PublicUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarUsuario(usuario: PublicUser): void {
+  try {
+    localStorage.setItem(CHAVE_USUARIO_GUARDADO, JSON.stringify(usuario));
+  } catch {
+    // Sem armazenamento local: só deixa de abrir offline.
+  }
+}
+
+function apagarUsuarioGuardado(): void {
+  try {
+    localStorage.removeItem(CHAVE_USUARIO_GUARDADO);
+  } catch {
+    // Nada a fazer.
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,9 +64,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         apiClient.setAccessToken(data.accessToken);
         const me = await apiClient.request<{ user: PublicUser }>('/auth/me', { auth: true });
         setUser(me.user);
-      } catch {
-        apiClient.setAccessToken(null);
-        setUser(null);
+        guardarUsuario(me.user);
+      } catch (err) {
+        // Erro de rede (o servidor não respondeu): segue com o usuário guardado, em modo offline.
+        // Resposta de recusa do servidor (ApiError 4xx, ex.: 401) significa sessão inválida. Erro 5xx
+        // (backend reiniciando) é indisponibilidade, não sessão inválida.
+        const indisponivel = !(err instanceof ApiError) || err.status >= 500;
+        const guardado = indisponivel ? lerUsuarioGuardado() : null;
+        if (guardado) {
+          setUser(guardado);
+        } else {
+          apiClient.setAccessToken(null);
+          apagarUsuarioGuardado();
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -46,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setUsuarioAutenticado = useCallback((novoUsuario: PublicUser, accessToken: string) => {
     apiClient.setAccessToken(accessToken);
+    guardarUsuario(novoUsuario);
     setUser(novoUsuario);
   }, []);
 
@@ -79,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await apiClient.request('/auth/logout', { method: 'POST', auth: true });
     } finally {
       apiClient.setAccessToken(null);
+      apagarUsuarioGuardado();
       setUser(null);
     }
   }, []);
