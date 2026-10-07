@@ -51,6 +51,8 @@ describe('sincronizarFila', () => {
 
   it('quando o servidor recusa, marca o erro, mantém a demanda e segue para a próxima', async () => {
     await adicionarPendente(pendenteBase('u1', 'Recusada'));
+    // A fila envia da mais antiga para a mais nova; instantes diferentes tornam a ordem determinística.
+    await new Promise((r) => setTimeout(r, 5));
     await adicionarPendente(pendenteBase('u1', 'Aceita'));
     vi.mocked(apiClient.request)
       .mockRejectedValueOnce(new ApiError(400, 'Telefone do solicitante inválido'))
@@ -78,6 +80,23 @@ describe('sincronizarFila', () => {
     expect(restantes).toHaveLength(2);
     expect(restantes.every((item) => item.ultimoErro === null)).toBe(true);
   });
+
+  it.each([401, 408, 429, 500, 503])(
+    'resposta %i é problema temporário: interrompe a rodada e NÃO marca a demanda como recusada',
+    async (status) => {
+      await adicionarPendente(pendenteBase('u1', 'A'));
+      await adicionarPendente(pendenteBase('u1', 'B'));
+      vi.mocked(apiClient.request).mockRejectedValue(new ApiError(status, 'indisponível'));
+
+      const resultado = await sincronizarFila('u1');
+
+      expect(resultado).toEqual({ enviadas: 0, recusadas: 0 });
+      expect(apiClient.request).toHaveBeenCalledTimes(1);
+      const restantes = await listarPendentes('u1');
+      expect(restantes).toHaveLength(2);
+      expect(restantes.every((item) => item.ultimoErro === null)).toBe(true);
+    },
+  );
 
   it('não reenvia automaticamente o que já foi recusado', async () => {
     await adicionarPendente(pendenteBase('u1', 'Recusada'));
