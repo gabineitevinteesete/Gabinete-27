@@ -10,7 +10,7 @@ export interface ResultadoSincronizacao {
 // demanda duas vezes.
 let emAndamento = false;
 
-export function montarFormData(pendente: DemandaPendente): FormData {
+export function montarFormData(pendente: Pick<DemandaPendente, 'campos' | 'fotos'>): FormData {
   const formData = new FormData();
   Object.entries(pendente.campos).forEach(([chave, valor]) => formData.append(chave, valor));
   pendente.fotos.forEach((foto, indice) => formData.append('fotos', foto, `foto-${indice}.jpg`));

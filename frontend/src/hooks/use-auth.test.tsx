@@ -10,7 +10,7 @@ vi.mock('@/services/api-client', async () => {
   };
 });
 
-import { apiClient } from '@/services/api-client';
+import { apiClient, ApiError } from '@/services/api-client';
 
 function Consumidor() {
   const { user, loading } = useAuth();
@@ -29,6 +29,7 @@ const USUARIO = {
 
 describe('AuthProvider — restauração da sessão na montagem', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.mocked(apiClient.request).mockReset();
     vi.mocked(apiClient.setAccessToken).mockReset();
   });
@@ -78,5 +79,89 @@ describe('AuthProvider — restauração da sessão na montagem', () => {
 
     await waitFor(() => expect(screen.getByText('sem sessão')).toBeInTheDocument());
     expect(apiClient.setAccessToken).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('AuthProvider — abrir o app sem internet', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(apiClient.request).mockReset();
+    vi.mocked(apiClient.setAccessToken).mockReset();
+  });
+
+  function renderizar() {
+    return render(
+      <AuthProvider>
+        <Consumidor />
+      </AuthProvider>,
+    );
+  }
+
+  it('guarda o resumo do usuário (sem token) depois de carregar a sessão', async () => {
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ accessToken: 'token-secreto' })
+      .mockResolvedValueOnce({ user: USUARIO });
+
+    renderizar();
+    await screen.findByText('autenticado: Ana Assessora');
+
+    const guardado = localStorage.getItem('gd:usuario')!;
+    expect(JSON.parse(guardado)).toEqual(USUARIO);
+    expect(guardado).not.toContain('token-secreto');
+  });
+
+  it('sem rede, mantém o usuário guardado em vez de mandar para o login', async () => {
+    localStorage.setItem('gd:usuario', JSON.stringify(USUARIO));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    renderizar();
+
+    expect(await screen.findByText('autenticado: Ana Assessora')).toBeInTheDocument();
+  });
+
+  it('sem rede e sem usuário guardado, fica sem sessão', async () => {
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    renderizar();
+
+    expect(await screen.findByText('sem sessão')).toBeInTheDocument();
+  });
+
+  it('quando o servidor responde 401, a sessão é inválida e o resumo guardado é apagado', async () => {
+    localStorage.setItem('gd:usuario', JSON.stringify(USUARIO));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(401, 'Sessão expirada'));
+
+    renderizar();
+
+    expect(await screen.findByText('sem sessão')).toBeInTheDocument();
+    expect(localStorage.getItem('gd:usuario')).toBeNull();
+  });
+
+  it('o logout apaga o resumo guardado', async () => {
+    function BotaoLogout() {
+      const { logout } = useAuth();
+      return (
+        <button type="button" onClick={() => void logout()}>
+          sair
+        </button>
+      );
+    }
+    vi.mocked(apiClient.request)
+      .mockResolvedValueOnce({ accessToken: 't' })
+      .mockResolvedValueOnce({ user: USUARIO })
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <AuthProvider>
+        <Consumidor />
+        <BotaoLogout />
+      </AuthProvider>,
+    );
+    await screen.findByText('autenticado: Ana Assessora');
+    expect(localStorage.getItem('gd:usuario')).not.toBeNull();
+
+    screen.getByRole('button', { name: 'sair' }).click();
+
+    await waitFor(() => expect(localStorage.getItem('gd:usuario')).toBeNull());
   });
 });
