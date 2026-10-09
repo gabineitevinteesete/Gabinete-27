@@ -48,7 +48,7 @@ export const apiClient = {
   },
   async request<T>(
     path: string,
-    options: { method?: string; body?: unknown; auth?: boolean } = {},
+    options: { method?: string; body?: unknown; auth?: boolean; headers?: Record<string, string> } = {},
   ): Promise<T> {
     const ehFormData = options.body instanceof FormData;
 
@@ -57,6 +57,7 @@ export const apiClient = {
       headers: {
         ...(ehFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(options.auth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(options.headers ?? {}),
       },
       credentials: 'include',
       body: ehFormData ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,

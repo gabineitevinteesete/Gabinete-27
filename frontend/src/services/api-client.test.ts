@@ -61,6 +61,17 @@ describe('apiClient.request', () => {
     });
   });
 
+  it('envia os cabeçalhos extras (ex.: Idempotency-Key) junto dos de sempre', async () => {
+    apiClient.setAccessToken('token-abc');
+    (fetch as any).mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ success: true, data: {} }) });
+
+    await apiClient.request('/demandas', { method: 'POST', body: new FormData(), auth: true, headers: { 'Idempotency-Key': 'chave-1' } });
+
+    const [, init] = (fetch as any).mock.calls[0];
+    expect(init.headers['Idempotency-Key']).toBe('chave-1');
+    expect(init.headers.Authorization).toBe('Bearer token-abc');
+  });
+
   // O POST /auth/logout responde 204 sem corpo: chamar res.json() ali lançava.
   it('não tenta parsear corpo em respostas 204', async () => {
     const json = vi.fn(async () => {

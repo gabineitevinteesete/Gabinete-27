@@ -1,3 +1,5 @@
+import { gerarUuid } from '@/lib/uuid';
+
 /**
  * Fila de demandas criadas sem internet, guardada no IndexedDB do aparelho até o envio.
  * Cada item pertence a um usuário: só ele o vê e o envia (ver `listarPendentes`).
@@ -79,20 +81,15 @@ async function comStore<T>(modo: IDBTransactionMode, operacao: (store: IDBObject
   }
 }
 
-function gerarId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 export async function adicionarPendente(entrada: {
+  /** Código do envio (Idempotency-Key). Quem já tentou enviar online passa o mesmo código aqui. */
+  id?: string;
   usuarioId: string;
   campos: Record<string, string>;
   fotos: Blob[];
 }): Promise<DemandaPendente> {
   const pendente: DemandaPendente = {
-    id: gerarId(),
+    id: entrada.id ?? gerarUuid(),
     usuarioId: entrada.usuarioId,
     criadoEm: Date.now(),
     campos: entrada.campos,
