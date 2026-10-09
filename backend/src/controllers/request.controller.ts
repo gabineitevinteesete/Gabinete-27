@@ -10,7 +10,8 @@ export function createRequestController(requestService: RequestService) {
       const dados = criarDemandaSchema.parse(req.body);
       const arquivos = (req.files as Express.Multer.File[] | undefined) ?? [];
       const cabecalhoChave = req.header('idempotency-key');
-      const chave = cabecalhoChave === undefined ? undefined : idempotencyKeySchema.safeParse(cabecalhoChave);
+      // Minúsculas: o mesmo UUID escrito em maiúsculas e em minúsculas é a mesma chave.
+      const chave = cabecalhoChave === undefined ? undefined : idempotencyKeySchema.safeParse(cabecalhoChave.toLowerCase());
       if (chave && !chave.success) {
         throw new HttpError(400, 'Cabeçalho Idempotency-Key inválido');
       }
@@ -25,6 +26,10 @@ export function createRequestController(requestService: RequestService) {
 
       if (resultado.status === 'ok') {
         res.status(201).json({ success: true, data: resultado.demanda });
+        return;
+      }
+      if (resultado.status === 'ok_reenvio_sem_acesso') {
+        res.status(201).json({ success: true, data: { id: resultado.id, codigoInterno: resultado.codigoInterno } });
         return;
       }
       if (resultado.status === 'tipo_invalido') {

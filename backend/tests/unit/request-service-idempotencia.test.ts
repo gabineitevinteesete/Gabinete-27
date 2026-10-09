@@ -104,6 +104,36 @@ describe('RequestService.criar — chave de idempotência', () => {
     expect(requestRepo.created).toHaveLength(2);
   });
 
+  it('reenvio de quem deixou de ser o responsável confirma o sucesso mas não devolve os dados da demanda', async () => {
+    const { service, requestRepo } = buildService();
+    const primeiro = await service.criar(await inputBase({ idempotencyKey: CHAVE }));
+    if (primeiro.status !== 'ok') throw new Error('esperava ok');
+    // O chefe reatribuiu a demanda para outro assessor.
+    await requestRepo.update(primeiro.demanda.id, {});
+    const guardada = await requestRepo.findById(primeiro.demanda.id);
+    (guardada as { assessorResponsavelId: string }).assessorResponsavelId = 'user-9';
+
+    const reenvio = await service.criar(await inputBase({ idempotencyKey: CHAVE }));
+
+    expect(reenvio).toEqual({
+      status: 'ok_reenvio_sem_acesso',
+      id: primeiro.demanda.id,
+      codigoInterno: primeiro.demanda.codigoInterno,
+    });
+  });
+
+  it('erro de banco que não é conflito de chave apaga as fotos já subidas antes de relançar', async () => {
+    const { service, requestRepo, photoUploader } = buildService();
+    requestRepo.create = async () => {
+      throw new Error('falha de conexão');
+    };
+
+    await expect(service.criar(await inputBase({ idempotencyKey: CHAVE }))).rejects.toThrow('falha de conexão');
+
+    expect(photoUploader.uploads).toHaveLength(2);
+    expect(photoUploader.deleted).toHaveLength(2);
+  });
+
   it('grava a chave junto da demanda criada', async () => {
     const { service, requestRepo } = buildService();
 

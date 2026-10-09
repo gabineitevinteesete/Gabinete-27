@@ -62,6 +62,9 @@ export interface CriarDemandaInput {
 
 export type CriarDemandaResultado =
   | { status: 'ok'; demanda: DemandaDetalhe }
+  // Reenvio de uma demanda que já foi criada por este usuário mas que hoje é de outro responsável:
+  // confirma o sucesso sem devolver os dados (o reenvio não pode ler o que a leitura normal negaria).
+  | { status: 'ok_reenvio_sem_acesso'; id: string; codigoInterno: string }
   | { status: 'tipo_invalido' }
   | { status: 'descricao_outro_obrigatoria' }
   | { status: 'telefone_invalido' }
@@ -155,9 +158,10 @@ export class RequestService {
   async criar(input: CriarDemandaInput): Promise<CriarDemandaResultado> {
     // Reenvio de um envio que já deu certo (resposta perdida, fila offline): devolve a demanda
     // existente sem refazer nada — sem processar fotos, sem subir ao Cloudinary, sem nova auditoria.
+    // A chave vale para qualquer corpo: não se compara o conteúdo do reenvio com o da demanda já criada.
     if (input.idempotencyKey) {
       const existente = await this.requestRepo.findByIdempotencyKey(input.assessorResponsavelId, input.idempotencyKey);
-      if (existente) return { status: 'ok', demanda: this.comFotosAssinadas(existente) };
+      if (existente) return this.resultadoDoReenvio(existente, input.assessorResponsavelId);
     }
 
     if (input.fotos.length < 2 || input.fotos.length > 4) {
@@ -241,12 +245,12 @@ export class RequestService {
       if (input.idempotencyKey && (err as { code?: string }).code === 'P2002') {
         const existente = await this.requestRepo.findByIdempotencyKey(input.assessorResponsavelId, input.idempotencyKey);
         if (existente) {
-          for (const foto of fotosEnviadas) {
-            await this.photoUploader.delete(foto.publicId).catch(() => {});
-          }
-          return { status: 'ok', demanda: this.comFotosAssinadas(existente) };
+          await this.apagarFotosEnviadas(fotosEnviadas);
+          return this.resultadoDoReenvio(existente, input.assessorResponsavelId);
         }
       }
+      // Qualquer outra falha ao gravar: as fotos já subidas não pertencem a nenhuma demanda.
+      await this.apagarFotosEnviadas(fotosEnviadas);
       throw err;
     }
 
@@ -259,6 +263,20 @@ export class RequestService {
     });
 
     return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
+  }
+
+  private resultadoDoReenvio(existente: RequestDetail, usuarioId: string): CriarDemandaResultado {
+    // Mesma regra de leitura de buscarPorId: quem deixou de ser o responsável não relê a demanda.
+    if (existente.assessorResponsavelId !== usuarioId) {
+      return { status: 'ok_reenvio_sem_acesso', id: existente.id, codigoInterno: existente.codigoInterno };
+    }
+    return { status: 'ok', demanda: this.comFotosAssinadas(existente) };
+  }
+
+  private async apagarFotosEnviadas(fotos: { publicId: string }[]): Promise<void> {
+    for (const foto of fotos) {
+      await this.photoUploader.delete(foto.publicId).catch(() => {});
+    }
   }
 
   async listar(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/Button';
@@ -90,6 +90,7 @@ function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void 
 
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const ultimoEnvio = useRef<{ assinatura: string; chave: string } | null>(null);
 
   useEffect(() => {
     apiClient
@@ -151,8 +152,14 @@ function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void 
     });
     const arquivos = fotos.map((foto) => foto.blob);
     // Código deste envio: o servidor o usa para reconhecer um reenvio (resposta perdida, fila offline)
-    // e não criar a demanda duas vezes. A fila guarda a demanda com este mesmo código.
-    const chave = gerarUuid();
+    // e não criar a demanda duas vezes. A fila guarda a demanda com este mesmo código. Enquanto o
+    // formulário não mudar, uma nova tentativa (ex.: depois de um 502 em que o servidor chegou a gravar)
+    // reaproveita o código; se o assessor editar qualquer coisa, é um envio novo.
+    const assinatura = JSON.stringify([campos, fotos.map((foto) => foto.id)]);
+    if (ultimoEnvio.current?.assinatura !== assinatura) {
+      ultimoEnvio.current = { assinatura, chave: gerarUuid() };
+    }
+    const chave = ultimoEnvio.current.chave;
 
     async function guardarNoAparelho() {
       if (!user) {

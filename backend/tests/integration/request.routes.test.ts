@@ -670,6 +670,17 @@ describe('POST /demandas — chave de idempotência', () => {
     expect(gravada.idempotencyKey).toBe(CHAVE);
   }, 60000); // Neon real via rede.
 
+  it('a mesma chave escrita em maiúsculas é reconhecida como a mesma', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998047');
+
+    const primeiro = await enviarComChave(tipo.id, accessToken, CHAVE);
+    const reenvio = await enviarComChave(tipo.id, accessToken, CHAVE.toUpperCase());
+
+    expect(reenvio.body.data.id).toBe(primeiro.body.data.id);
+    expect(await testPrisma.request.count()).toBe(1);
+  }, 60000); // Neon real via rede.
+
   it('outro usuário com a mesma chave cria a própria demanda', async () => {
     const tipo = await criarTipo();
     const { accessToken: tokenA } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998042');

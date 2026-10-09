@@ -140,22 +140,29 @@ describe('NovaDemandaPage — chave de idempotência', () => {
     expect(adicionarPendente.mock.calls[0]![0]).toMatchObject({ id: chaveEnviada });
   });
 
-  it('cada clique em enviar gera um código novo', async () => {
+  it('repetir o envio sem mudar o formulário reaproveita o código; mudar qualquer campo gera um novo', async () => {
     const { ApiError } = await vi.importActual<typeof import('@/services/api-client')>('@/services/api-client');
     vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(400, 'Envie de 2 a 4 fotos'));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(502, 'Erro inesperado'));
     vi.mocked(apiClient.request).mockResolvedValueOnce({ id: 'demanda-1' });
 
     render(<NovaDemandaPage />);
     await preencherCamposObrigatorios();
     fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
     await screen.findByText('Envie de 2 a 4 fotos');
+    // Segundo clique com o formulário igual: é a mesma tentativa.
+    fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
+    await screen.findByText('Erro inesperado');
+    // O assessor corrige um campo: é um envio novo.
+    fireEvent.change(screen.getByLabelText(/título resumido/i), { target: { value: 'Buraco na rua (corrigido)' } });
     fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
     await waitFor(() => expect(push).toHaveBeenCalled());
 
     const envios = vi.mocked(apiClient.request).mock.calls.filter(([url]) => url === '/demandas');
     const chaves = envios.map((c) => (c[1] as { headers: Record<string, string> }).headers['Idempotency-Key']);
-    expect(chaves).toHaveLength(2);
-    expect(chaves[0]).not.toBe(chaves[1]);
+    expect(chaves).toHaveLength(3);
+    expect(chaves[0]).toBe(chaves[1]);
+    expect(chaves[2]).not.toBe(chaves[1]);
   });
 });
 
