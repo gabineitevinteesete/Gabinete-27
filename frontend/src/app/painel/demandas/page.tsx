@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { apiClient } from '@/services/api-client';
+import { useAuth } from '@/hooks/use-auth';
+import { guardarLista, lerLista } from '@/lib/lista-demandas-offline';
+import { apiClient, ApiError } from '@/services/api-client';
 import type { DemandaResumo, TipoDemanda } from '@/types/request';
 import { STATUS_LABEL } from '@/lib/request-status';
 import { ExportarDemandas } from '@/components/ExportarDemandas';
@@ -71,6 +73,8 @@ const CLASSE_CAMPO =
   'mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary';
 
 export default function DemandasPage() {
+  const { user } = useAuth();
+  const usuarioId = user?.id ?? null;
   const searchParams = useSearchParams();
   const assessorResponsavelIdInicial = searchParams.get('assessorResponsavelId') ?? '';
   const bairroInicial = searchParams.get('bairro') ?? '';
@@ -89,6 +93,10 @@ export default function DemandasPage() {
   const [assessorResponsavelId] = useState(assessorResponsavelIdInicial);
   const [tipos, setTipos] = useState<TipoDemanda[]>([]);
   const [carregando, setCarregando] = useState(true);
+  // Quando preenchido, a lista na tela é a cópia guardada (sem internet) salva neste instante.
+  const [copiaSalvaEm, setCopiaSalvaEm] = useState<number | null>(null);
+  // Aumenta quando a internet volta com a cópia na tela, para refazer a busca sozinha.
+  const [novaTentativa, setNovaTentativa] = useState(0);
   const tamanhoPagina = 20;
 
   const voltarParaPrimeiraPagina = useCallback(() => setPagina(1), []);
@@ -130,9 +138,24 @@ export default function DemandasPage() {
         if (!ativo) return;
         setItens(resposta.items);
         setTotal(resposta.total);
+        setCopiaSalvaEm(null);
+        // Só a primeira página sem nenhum filtro vira cópia para uso offline.
+        // O token zera no logout: uma resposta que chega logo depois dele não recria a cópia apagada.
+        if (usuarioId && pagina === 1 && filtros === '' && apiClient.getAccessToken()) {
+          guardarLista(usuarioId, resposta);
+        }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!ativo) return;
+        // Sem resposta do servidor (sem rede): mostra a última cópia do próprio usuário, se houver.
+        const copia = !(err instanceof ApiError) && usuarioId ? lerLista(usuarioId) : null;
+        if (copia) {
+          setItens(copia.items);
+          setTotal(copia.total);
+          setCopiaSalvaEm(copia.salvaEm);
+          return;
+        }
+        setCopiaSalvaEm(null);
         setItens([]);
         setTotal(0);
       })
@@ -142,7 +165,14 @@ export default function DemandasPage() {
     return () => {
       ativo = false;
     };
-  }, [pagina, filtros]);
+  }, [pagina, filtros, usuarioId, novaTentativa]);
+
+  useEffect(() => {
+    if (copiaSalvaEm === null) return;
+    const aoVoltarOnline = () => setNovaTentativa((n) => n + 1);
+    window.addEventListener('online', aoVoltarOnline);
+    return () => window.removeEventListener('online', aoVoltarOnline);
+  }, [copiaSalvaEm]);
 
   const totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
   const filtrosAtivos = Boolean(bairro.trim() || codigo.trim() || nome.trim() || tipoId || status || de || ate);
@@ -177,7 +207,7 @@ export default function DemandasPage() {
         </Link>
       </div>
 
-      <ExportarDemandas filtros={filtros} desabilitado={carregando || filtrosDeTextoPendentes} />
+      <ExportarDemandas filtros={filtros} desabilitado={carregando || filtrosDeTextoPendentes || copiaSalvaEm !== null} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
         <div>
@@ -292,6 +322,14 @@ export default function DemandasPage() {
         </button>
       )}
 
+      {copiaSalvaEm !== null && (
+        <p role="status" className="rounded-xl bg-secondary-light px-4 py-3 text-sm text-secondary-dark">
+          Sem conexão. Mostrando a lista salva em {new Date(copiaSalvaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.
+          Filtros e outras páginas só funcionam com internet.
+          {(filtros !== '' || pagina !== 1) && ' A lista abaixo não está filtrada: é a primeira página.'}
+        </p>
+      )}
+
       {carregando && <p className="text-sm text-gray-500">Carregando…</p>}
 
       {!carregando && itens.length === 0 && (
@@ -314,7 +352,7 @@ export default function DemandasPage() {
         ))}
       </div>
 
-      {totalPaginas > 1 && (
+      {totalPaginas > 1 && copiaSalvaEm === null && (
         <div className="flex items-center justify-center gap-4">
           <button
             type="button"

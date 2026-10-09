@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { apiClient, ApiError } from '@/services/api-client';
 import type { PublicUser } from '@/types/auth';
+import { apagarLista } from '@/lib/lista-demandas-offline';
 
 export type { UserRoleValue, PublicUser } from '@/types/auth';
 
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           apiClient.setAccessToken(null);
           apagarUsuarioGuardado();
+          apagarLista();
           setUser(null);
         }
       } finally {
@@ -86,6 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setUsuarioAutenticado = useCallback((novoUsuario: PublicUser, accessToken: string) => {
     apiClient.setAccessToken(accessToken);
+    // Quem entra começa sem a cópia da lista de quem usou o aparelho antes (ex.: sessão expirada
+    // sem logout); a de quem entra é gravada de novo na primeira carga da lista.
+    apagarLista();
     guardarUsuario(novoUsuario);
     setUser(novoUsuario);
   }, []);
@@ -121,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       apiClient.setAccessToken(null);
       apagarUsuarioGuardado();
+      apagarLista();
       setUser(null);
     }
   }, []);
