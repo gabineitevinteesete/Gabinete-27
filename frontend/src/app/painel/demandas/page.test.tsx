@@ -16,7 +16,9 @@ vi.mock('@/services/api-client', async () => {
   const actual = await vi.importActual<typeof import('@/services/api-client')>('@/services/api-client');
   return { ...actual, apiClient: { ...actual.apiClient, request: vi.fn() } };
 });
-import { apiClient } from '@/services/api-client';
+import { apiClient, ApiError } from '@/services/api-client';
+
+vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 
 // O botão de exportar tem testes próprios; aqui só interessa a query string que a página lhe entrega.
 vi.mock('@/components/ExportarDemandas', () => ({
@@ -58,6 +60,7 @@ function ultimaUrl() {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   vi.mocked(apiClient.request).mockReset();
 });
 
@@ -401,5 +404,109 @@ describe('DemandasPage — exportação', () => {
 
     await waitFor(() => expect(screen.getByTestId('exportar')).toHaveAttribute('data-desabilitado', 'false'));
     expect(screen.getByTestId('exportar')).toHaveAttribute('data-filtros', 'codigoInterno=GD-7');
+  });
+});
+
+describe('DemandasPage — lista sem internet', () => {
+  const copia = (usuarioId = 'u1') =>
+    JSON.stringify({
+      usuarioId,
+      salvaEm: new Date('2026-10-08T15:30:00').getTime(),
+      items: [itemFake({ tituloResumido: 'Da cópia guardada' })],
+      total: 45,
+    });
+
+  function falharDemandasComRede(erro: unknown) {
+    vi.mocked(apiClient.request).mockImplementation((async (url: string) => {
+      if (url.startsWith('/tipos-demanda')) return [tipoFake];
+      throw erro;
+    }) as unknown as typeof apiClient.request);
+  }
+
+  it('guarda a cópia quando a primeira página sem filtros carrega', async () => {
+    mockApi({ items: [itemFake()], total: 1, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    await screen.findByText('Buraco na rua');
+
+    const guardada = JSON.parse(localStorage.getItem('gd:lista-demandas')!);
+    expect(guardada.usuarioId).toBe('u1');
+    expect(guardada.items).toHaveLength(1);
+    expect(guardada.total).toBe(1);
+  });
+
+  it('não guarda cópia de busca filtrada nem de outra página', async () => {
+    mockApi({ items: [itemFake()], total: 45, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    await screen.findByText('Buraco na rua');
+    localStorage.clear();
+
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+    await waitFor(() => expect(ultimaUrl()).toContain('status=RECEBIDA'));
+    fireEvent.click(await screen.findByText('Próxima'));
+    await waitFor(() => expect(ultimaUrl()).toContain('pagina=2'));
+
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
+  });
+
+  it('sem rede, mostra a cópia do próprio usuário com o aviso e sem paginação', async () => {
+    localStorage.setItem('gd:lista-demandas', copia());
+    falharDemandasComRede(new TypeError('Failed to fetch'));
+
+    render(<DemandasPage />);
+
+    expect(await screen.findByText('Da cópia guardada')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/Sem conexão\. Mostrando a lista salva em/);
+    expect(screen.getByRole('status')).toHaveTextContent('08/10/2026');
+    expect(screen.queryByText('Próxima')).not.toBeInTheDocument();
+  });
+
+  it('sem rede e sem cópia, mostra que não há demandas', async () => {
+    falharDemandasComRede(new TypeError('Failed to fetch'));
+
+    render(<DemandasPage />);
+
+    expect(await screen.findByText(/nenhuma demanda encontrada/i)).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('cópia de outro usuário no aparelho é ignorada', async () => {
+    localStorage.setItem('gd:lista-demandas', copia('outro-usuario'));
+    falharDemandasComRede(new TypeError('Failed to fetch'));
+
+    render(<DemandasPage />);
+
+    expect(await screen.findByText(/nenhuma demanda encontrada/i)).toBeInTheDocument();
+    expect(screen.queryByText('Da cópia guardada')).not.toBeInTheDocument();
+  });
+
+  it('erro de resposta do servidor não usa a cópia', async () => {
+    localStorage.setItem('gd:lista-demandas', copia());
+    falharDemandasComRede(new ApiError(500, 'Erro interno'));
+
+    render(<DemandasPage />);
+
+    expect(await screen.findByText(/nenhuma demanda encontrada/i)).toBeInTheDocument();
+    expect(screen.queryByText('Da cópia guardada')).not.toBeInTheDocument();
+  });
+
+  it('quando a internet volta e a busca funciona, o aviso some e a lista é a do servidor', async () => {
+    localStorage.setItem('gd:lista-demandas', copia());
+    let online = false;
+    vi.mocked(apiClient.request).mockImplementation((async (url: string) => {
+      if (url.startsWith('/tipos-demanda')) return [tipoFake];
+      if (!online) throw new TypeError('Failed to fetch');
+      return { items: [itemFake({ tituloResumido: 'Do servidor' })], total: 1, pagina: 1, tamanhoPagina: 20 };
+    }) as unknown as typeof apiClient.request);
+
+    render(<DemandasPage />);
+    await screen.findByText('Da cópia guardada');
+
+    online = true;
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+
+    expect(await screen.findByText('Do servidor')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

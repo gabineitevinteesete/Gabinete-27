@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { apiClient, ApiError } from '@/services/api-client';
 import type { PublicUser } from '@/types/auth';
+import { apagarLista } from '@/lib/lista-demandas-offline';
 
 export type { UserRoleValue, PublicUser } from '@/types/auth';
 
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           apiClient.setAccessToken(null);
           apagarUsuarioGuardado();
+          apagarLista();
           setUser(null);
         }
       } finally {
@@ -121,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       apiClient.setAccessToken(null);
       apagarUsuarioGuardado();
+      apagarLista();
       setUser(null);
     }
   }, []);

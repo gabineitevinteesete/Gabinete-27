@@ -147,6 +147,16 @@ describe('AuthProvider — abrir o app sem internet', () => {
     expect(localStorage.getItem('gd:usuario')).not.toBeNull();
   });
 
+  it('sessão inválida (401) também apaga a cópia da lista de demandas', async () => {
+    localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'u-1', salvaEm: 1, items: [], total: 0 }));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(401, 'Sessão expirada'));
+
+    renderizar();
+
+    expect(await screen.findByText('sem sessão')).toBeInTheDocument();
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
+  });
+
   it('o logout apaga o resumo guardado', async () => {
     function BotaoLogout() {
       const { logout } = useAuth();
@@ -169,9 +179,11 @@ describe('AuthProvider — abrir o app sem internet', () => {
     );
     await screen.findByText('autenticado: Ana Assessora');
     expect(localStorage.getItem('gd:usuario')).not.toBeNull();
+    localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'u-1', salvaEm: 1, items: [], total: 0 }));
 
     screen.getByRole('button', { name: 'sair' }).click();
 
     await waitFor(() => expect(localStorage.getItem('gd:usuario')).toBeNull());
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
   });
 });
