@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { apagarLista, guardarLista, lerLista } from './lista-demandas-offline';
 import type { DemandaResumo } from '@/types/request';
 
@@ -21,6 +21,10 @@ function item(id: string): DemandaResumo {
 
 beforeEach(() => {
   localStorage.clear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('lista-demandas-offline', () => {
@@ -50,6 +54,27 @@ describe('lista-demandas-offline', () => {
     expect(lerLista('u1')).toBeNull();
 
     localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'u1', salvaEm: 1 }));
+    expect(lerLista('u1')).toBeNull();
+  });
+
+  it('cópia com mais de 7 dias não é usada e é apagada', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-01T10:00:00'));
+    guardarLista('u1', { items: [item('1')], total: 1 });
+
+    vi.setSystemTime(new Date('2026-10-07T10:00:00'));
+    expect(lerLista('u1')).not.toBeNull();
+
+    vi.setSystemTime(new Date('2026-10-09T10:00:00'));
+    expect(lerLista('u1')).toBeNull();
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
+  });
+
+  it('cópia com data ou total malformados é ignorada (nada de "Invalid Date" na tela)', () => {
+    localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'u1', salvaEm: 'ontem', items: [], total: 0 }));
+    expect(lerLista('u1')).toBeNull();
+
+    localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'u1', salvaEm: Date.now(), items: [], total: 'x' }));
     expect(lerLista('u1')).toBeNull();
   });
 

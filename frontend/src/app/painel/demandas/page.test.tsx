@@ -14,7 +14,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/services/api-client', async () => {
   const actual = await vi.importActual<typeof import('@/services/api-client')>('@/services/api-client');
-  return { ...actual, apiClient: { ...actual.apiClient, request: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, request: vi.fn(), getAccessToken: vi.fn(() => 'token') } };
 });
 import { apiClient, ApiError } from '@/services/api-client';
 
@@ -435,6 +435,38 @@ describe('DemandasPage — lista sem internet', () => {
     expect(guardada.total).toBe(1);
   });
 
+  it('não guarda cópia da página 2, mesmo sem nenhum filtro', async () => {
+    mockApi({ items: [itemFake()], total: 45, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    fireEvent.click(await screen.findByText('Próxima'));
+    await waitFor(() => expect(ultimaUrl()).toContain('pagina=2'));
+    expect(ultimaUrl()).not.toMatch(/status=|bairro=|codigoInterno=|solicitanteNome=|requestTypeId=|dataInicial=/);
+    await screen.findByText('Página 2 de 3');
+
+    // Só a página 1 (carregada antes) pode ter gravado; apaga e confirma que a 2 não regrava.
+    localStorage.clear();
+    fireEvent.click(screen.getByText('Anterior'));
+    await waitFor(() => expect(ultimaUrl()).toContain('pagina=1'));
+    localStorage.clear();
+    fireEvent.click(await screen.findByText('Próxima'));
+    await waitFor(() => expect(chamadasDemandas().length).toBeGreaterThanOrEqual(4));
+    await screen.findByText('Página 2 de 3');
+
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
+  });
+
+  it('não grava a cópia se a resposta chegar depois do logout (sem token)', async () => {
+    vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
+    mockApi({ items: [itemFake()], total: 1, pagina: 1, tamanhoPagina: 20 });
+
+    render(<DemandasPage />);
+    await screen.findByText('Buraco na rua');
+
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
+    vi.mocked(apiClient.getAccessToken).mockReturnValue('token');
+  });
+
   it('não guarda cópia de busca filtrada nem de outra página', async () => {
     mockApi({ items: [itemFake()], total: 45, pagina: 1, tamanhoPagina: 20 });
 
@@ -460,6 +492,38 @@ describe('DemandasPage — lista sem internet', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/Sem conexão\. Mostrando a lista salva em/);
     expect(screen.getByRole('status')).toHaveTextContent('08/10/2026');
     expect(screen.queryByText('Próxima')).not.toBeInTheDocument();
+  });
+
+  it('com filtro ativo e sem rede, o aviso diz que a lista abaixo não está filtrada', async () => {
+    localStorage.setItem('gd:lista-demandas', copia());
+    falharDemandasComRede(new TypeError('Failed to fetch'));
+
+    render(<DemandasPage />);
+    await screen.findByText('Da cópia guardada');
+    expect(screen.getByRole('status')).not.toHaveTextContent('não está filtrada');
+
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'RECEBIDA' } });
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('A lista abaixo não está filtrada'));
+  });
+
+  it('quando o aparelho volta a ter rede, refaz a busca sozinho e o aviso some', async () => {
+    localStorage.setItem('gd:lista-demandas', copia());
+    let online = false;
+    vi.mocked(apiClient.request).mockImplementation((async (url: string) => {
+      if (url.startsWith('/tipos-demanda')) return [tipoFake];
+      if (!online) throw new TypeError('Failed to fetch');
+      return { items: [itemFake({ tituloResumido: 'Do servidor' })], total: 1, pagina: 1, tamanhoPagina: 20 };
+    }) as unknown as typeof apiClient.request);
+
+    render(<DemandasPage />);
+    await screen.findByText('Da cópia guardada');
+
+    online = true;
+    window.dispatchEvent(new Event('online'));
+
+    expect(await screen.findByText('Do servidor')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('sem rede e sem cópia, mostra que não há demandas', async () => {

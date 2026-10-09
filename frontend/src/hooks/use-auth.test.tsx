@@ -157,6 +157,35 @@ describe('AuthProvider — abrir o app sem internet', () => {
     expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
   });
 
+  it('um novo login apaga a cópia da lista deixada por quem usou o aparelho antes', async () => {
+    localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'outro', salvaEm: Date.now(), items: [], total: 0 }));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(401, 'Sem sessão'));
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ status: 'ok', accessToken: 't', user: USUARIO });
+
+    function BotaoLogin() {
+      const { login } = useAuth();
+      return (
+        <button type="button" onClick={() => void login('(34) 99999-8888', '482913')}>
+          entrar
+        </button>
+      );
+    }
+    render(
+      <AuthProvider>
+        <Consumidor />
+        <BotaoLogin />
+      </AuthProvider>,
+    );
+    await screen.findByText('sem sessão');
+    // O 401 da restauração já apagou a cópia; recoloca para provar que o login também a apaga.
+    localStorage.setItem('gd:lista-demandas', JSON.stringify({ usuarioId: 'outro', salvaEm: Date.now(), items: [], total: 0 }));
+
+    screen.getByRole('button', { name: 'entrar' }).click();
+
+    expect(await screen.findByText('autenticado: Ana Assessora')).toBeInTheDocument();
+    expect(localStorage.getItem('gd:lista-demandas')).toBeNull();
+  });
+
   it('o logout apaga o resumo guardado', async () => {
     function BotaoLogout() {
       const { logout } = useAuth();

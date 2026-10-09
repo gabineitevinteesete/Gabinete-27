@@ -6,6 +6,9 @@ import type { DemandaResumo } from '@/types/request';
  */
 const CHAVE_LISTA = 'gd:lista-demandas';
 
+// Passado este prazo a cópia deixa de ser usada (e some do aparelho): evita dado velho para sempre.
+const VALIDADE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface ListaGuardada {
   usuarioId: string;
   salvaEm: number;
@@ -51,7 +54,13 @@ export function lerLista(usuarioId: string): ListaGuardada | null {
     const bruto = localStorage.getItem(CHAVE_LISTA);
     if (!bruto) return null;
     const guardada = JSON.parse(bruto) as ListaGuardada;
-    if (guardada.usuarioId !== usuarioId || !Array.isArray(guardada.items)) return null;
+    const valida =
+      Array.isArray(guardada.items) && Number.isFinite(guardada.salvaEm) && Number.isFinite(guardada.total);
+    if (!valida || guardada.usuarioId !== usuarioId) return null;
+    if (Date.now() - guardada.salvaEm > VALIDADE_MS) {
+      apagarLista();
+      return null;
+    }
     return guardada;
   } catch {
     return null;

@@ -88,6 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setUsuarioAutenticado = useCallback((novoUsuario: PublicUser, accessToken: string) => {
     apiClient.setAccessToken(accessToken);
+    // Quem entra começa sem a cópia da lista de quem usou o aparelho antes (ex.: sessão expirada
+    // sem logout); a de quem entra é gravada de novo na primeira carga da lista.
+    apagarLista();
     guardarUsuario(novoUsuario);
     setUser(novoUsuario);
   }, []);
