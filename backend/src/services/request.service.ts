@@ -56,6 +56,8 @@ export interface CriarDemandaInput {
   assessorResponsavelId: string;
   fotos: Buffer[];
   ip?: string;
+  /** UUID do envio (cabeçalho Idempotency-Key); permite reconhecer um reenvio. */
+  idempotencyKey?: string;
 }
 
 export type CriarDemandaResultado =
@@ -151,6 +153,13 @@ export class RequestService {
   }
 
   async criar(input: CriarDemandaInput): Promise<CriarDemandaResultado> {
+    // Reenvio de um envio que já deu certo (resposta perdida, fila offline): devolve a demanda
+    // existente sem refazer nada — sem processar fotos, sem subir ao Cloudinary, sem nova auditoria.
+    if (input.idempotencyKey) {
+      const existente = await this.requestRepo.findByIdempotencyKey(input.assessorResponsavelId, input.idempotencyKey);
+      if (existente) return { status: 'ok', demanda: this.comFotosAssinadas(existente) };
+    }
+
     if (input.fotos.length < 2 || input.fotos.length > 4) {
       return { status: 'quantidade_fotos_invalida' };
     }
@@ -198,31 +207,48 @@ export class RequestService {
       });
     }
 
-    const demanda = await this.requestRepo.create(
-      {
-        codigoInterno: gerarCodigoInterno(),
-        solicitanteNome: input.solicitanteNome,
-        solicitanteTelefone,
-        solicitanteNascimento: input.solicitanteNascimento,
-        cep: input.cep,
-        rua: input.rua,
-        numero: input.numero,
-        complemento: input.complemento,
-        bairro: input.bairro,
-        cidade: input.cidade,
-        estado: input.estado,
-        pontoReferencia: input.pontoReferencia,
-        localExato: input.localExato,
-        tituloResumido: input.tituloResumido,
-        descricao: input.descricao,
-        descricaoOutroAssunto: input.descricaoOutroAssunto,
-        requestTypeId: input.requestTypeId,
-        assessorResponsavelId: input.assessorResponsavelId,
-        criadoPorId: input.assessorResponsavelId,
-        autorizacaoDados: input.autorizacaoDados,
-      },
-      fotosEnviadas,
-    );
+    let demanda: RequestDetail;
+    try {
+      demanda = await this.requestRepo.create(
+        {
+          codigoInterno: gerarCodigoInterno(),
+          solicitanteNome: input.solicitanteNome,
+          solicitanteTelefone,
+          solicitanteNascimento: input.solicitanteNascimento,
+          cep: input.cep,
+          rua: input.rua,
+          numero: input.numero,
+          complemento: input.complemento,
+          bairro: input.bairro,
+          cidade: input.cidade,
+          estado: input.estado,
+          pontoReferencia: input.pontoReferencia,
+          localExato: input.localExato,
+          tituloResumido: input.tituloResumido,
+          descricao: input.descricao,
+          descricaoOutroAssunto: input.descricaoOutroAssunto,
+          requestTypeId: input.requestTypeId,
+          assessorResponsavelId: input.assessorResponsavelId,
+          criadoPorId: input.assessorResponsavelId,
+          autorizacaoDados: input.autorizacaoDados,
+          idempotencyKey: input.idempotencyKey,
+        },
+        fotosEnviadas,
+      );
+    } catch (err) {
+      // Dois envios simultâneos com a mesma chave: o índice único barrou o segundo. Apaga as fotos
+      // que ele acabou de subir (melhor esforço) e devolve a demanda gravada pelo primeiro.
+      if (input.idempotencyKey && (err as { code?: string }).code === 'P2002') {
+        const existente = await this.requestRepo.findByIdempotencyKey(input.assessorResponsavelId, input.idempotencyKey);
+        if (existente) {
+          for (const foto of fotosEnviadas) {
+            await this.photoUploader.delete(foto.publicId).catch(() => {});
+          }
+          return { status: 'ok', demanda: this.comFotosAssinadas(existente) };
+        }
+      }
+      throw err;
+    }
 
     await this.auditLogRepo.record({
       actorUserId: input.assessorResponsavelId,

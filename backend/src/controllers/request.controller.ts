@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { LIMITE_EXPORTACAO, type RequestService } from '../services/request.service.js';
-import { criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, exportarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../validators/request.validators.js';
+import { idempotencyKeySchema, criarDemandaSchema, editarDemandaSchema, listarDemandasQuerySchema, exportarDemandasQuerySchema, demandaIdParamsSchema, mudarStatusSchema, reatribuirSchema } from '../validators/request.validators.js';
 import { HttpError } from '../middlewares/error-handler.js';
 import { getClientIp } from '../utils/request-ip.js';
 
@@ -9,12 +9,18 @@ export function createRequestController(requestService: RequestService) {
     async criar(req: Request, res: Response) {
       const dados = criarDemandaSchema.parse(req.body);
       const arquivos = (req.files as Express.Multer.File[] | undefined) ?? [];
+      const cabecalhoChave = req.header('idempotency-key');
+      const chave = cabecalhoChave === undefined ? undefined : idempotencyKeySchema.safeParse(cabecalhoChave);
+      if (chave && !chave.success) {
+        throw new HttpError(400, 'Cabeçalho Idempotency-Key inválido');
+      }
 
       const resultado = await requestService.criar({
         ...dados,
         assessorResponsavelId: req.user!.id,
         fotos: arquivos.map((arquivo) => arquivo.buffer),
         ip: getClientIp(req),
+        idempotencyKey: chave?.data,
       });
 
       if (resultado.status === 'ok') {

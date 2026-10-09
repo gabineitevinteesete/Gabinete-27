@@ -642,3 +642,81 @@ describe('GET /demandas/exportar', () => {
     expect(auditoria[0]!.detalhes).toEqual({ quantidade: 0 });
   }, 30000); // Neon real via rede.
 });
+
+describe('POST /demandas — chave de idempotência', () => {
+  const CHAVE = '3f8b6a52-5d4e-4c4e-9a53-1c1f2a9d7b10';
+
+  async function enviarComChave(tipoId: string, token: string, chave?: string) {
+    const foto1 = await fotoValida();
+    const foto2 = await fotoValida();
+    const pedido = request(app).post('/demandas').set('Authorization', `Bearer ${token}`);
+    if (chave) pedido.set('Idempotency-Key', chave);
+    return pedido.field(camposBase(tipoId)).attach('fotos', foto1, 'foto1.jpg').attach('fotos', foto2, 'foto2.jpg');
+  }
+
+  it('o reenvio com a mesma chave devolve a mesma demanda e não cria outra', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998041');
+
+    const primeiro = await enviarComChave(tipo.id, accessToken, CHAVE);
+    const reenvio = await enviarComChave(tipo.id, accessToken, CHAVE);
+
+    expect(primeiro.status).toBe(201);
+    expect(reenvio.status).toBe(201);
+    expect(reenvio.body.data.id).toBe(primeiro.body.data.id);
+    expect(await testPrisma.request.count()).toBe(1);
+    expect(await testPrisma.auditLog.count({ where: { acao: 'CRIAR_DEMANDA' } })).toBe(1);
+    const gravada = await testPrisma.request.findUniqueOrThrow({ where: { id: primeiro.body.data.id } });
+    expect(gravada.idempotencyKey).toBe(CHAVE);
+  }, 60000); // Neon real via rede.
+
+  it('outro usuário com a mesma chave cria a própria demanda', async () => {
+    const tipo = await criarTipo();
+    const { accessToken: tokenA } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998042');
+    const { accessToken: tokenB } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998043');
+
+    const a = await enviarComChave(tipo.id, tokenA, CHAVE);
+    const b = await enviarComChave(tipo.id, tokenB, CHAVE);
+
+    expect(a.status).toBe(201);
+    expect(b.status).toBe(201);
+    expect(b.body.data.id).not.toBe(a.body.data.id);
+    expect(await testPrisma.request.count()).toBe(2);
+  }, 60000); // Neon real via rede.
+
+  it('sem a chave, cada envio cria uma demanda', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998044');
+
+    const a = await enviarComChave(tipo.id, accessToken);
+    const b = await enviarComChave(tipo.id, accessToken);
+
+    expect(a.body.data.id).not.toBe(b.body.data.id);
+    expect(await testPrisma.request.count()).toBe(2);
+  }, 60000); // Neon real via rede.
+
+  it('chave que não é UUID é recusada com 400, sem criar nada', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998045');
+
+    const res = await enviarComChave(tipo.id, accessToken, 'qualquer-coisa');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Cabeçalho Idempotency-Key inválido');
+    expect(await testPrisma.request.count()).toBe(0);
+  }, 30000); // Neon real via rede.
+
+  it('dois envios simultâneos com a mesma chave resultam em uma única demanda', async () => {
+    const tipo = await criarTipo();
+    const { accessToken } = await loginComoAssessor('ASSESSOR_RUA', '+5534999998046');
+
+    const [a, b] = await Promise.all([
+      enviarComChave(tipo.id, accessToken, CHAVE),
+      enviarComChave(tipo.id, accessToken, CHAVE),
+    ]);
+
+    expect([a.status, b.status]).toEqual([201, 201]);
+    expect(a.body.data.id).toBe(b.body.data.id);
+    expect(await testPrisma.request.count()).toBe(1);
+  }, 60000); // Neon real via rede.
+});

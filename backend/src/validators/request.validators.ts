@@ -75,3 +75,5 @@ export const reatribuirSchema = z.object({
 });
 
 export const exportarDemandasQuerySchema = listarDemandasQuerySchema.omit({ pagina: true, tamanhoPagina: true });
+
+export const idempotencyKeySchema = z.string().uuid();
