@@ -11,6 +11,8 @@ export interface NotificacaoItem {
 
 export interface NotificationRepository {
   create(data: { userId: string; requestId?: string; tipo: string; mensagem: string }): Promise<void>;
+  /** Uma única gravação para vários avisos (ex.: todos os chefes). */
+  createMany(data: { userId: string; requestId?: string; tipo: string; mensagem: string }[]): Promise<void>;
   /** Os `limite` avisos mais recentes da pessoa e o total de não lidos (não só dos listados). */
   listar(userId: string, limite: number): Promise<{ items: NotificacaoItem[]; naoLidas: number }>;
   /** `false` quando o aviso não existe ou é de outra pessoa. */
@@ -24,11 +26,17 @@ export function createNotificationRepository(prisma: PrismaClient): Notification
       await prisma.notification.create({ data: { userId, requestId, tipo, mensagem } });
     },
 
+    async createMany(data) {
+      if (data.length === 0) return;
+      await prisma.notification.createMany({ data });
+    },
+
     async listar(userId, limite) {
       const [items, naoLidas] = await Promise.all([
         prisma.notification.findMany({
           where: { userId },
-          orderBy: { createdAt: 'desc' },
+          // `id` desempata avisos criados no mesmo instante, para a ordem não variar entre buscas.
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limite,
           select: { id: true, requestId: true, tipo: true, mensagem: true, lida: true, createdAt: true },
         }),

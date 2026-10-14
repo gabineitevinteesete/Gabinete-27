@@ -140,7 +140,42 @@ describe('NotificacaoService', () => {
     expect((await service.listar('5')).naoLidas).toBe(0);
   });
 
-  it('a lista é limitada aos 30 avisos mais recentes', () => {
+  it('a lista é limitada aos 30 avisos mais recentes, mas o contador conta todos os não lidos', async () => {
+    const { service } = build();
+    for (let i = 0; i < 35; i += 1) {
+      await service.demandaReatribuida({ id: `r${i}`, codigoInterno: `GD-${i}` }, '4', '1');
+    }
+
+    const { items, naoLidas } = await service.listar('4');
+
     expect(LIMITE_LISTA_NOTIFICACOES).toBe(30);
+    expect(items).toHaveLength(30);
+    expect(naoLidas).toBe(35);
+    expect(items[0]!.mensagem).toBe('Você recebeu a demanda GD-34.');
+  });
+
+  it('avisar os chefes é uma única gravação, não uma por chefe', async () => {
+    const { service, notificationRepo } = build();
+    let gravacoes = 0;
+    const original = notificationRepo.createMany.bind(notificationRepo);
+    notificationRepo.createMany = async (dados) => {
+      gravacoes += 1;
+      return original(dados);
+    };
+
+    await service.demandaCriada(demanda, '4');
+
+    expect(gravacoes).toBe(1);
+    expect(notificationRepo.criadas).toHaveLength(2);
+  });
+
+  it('sem nenhum chefe para avisar não grava nada', async () => {
+    const userRepo = createFakeUserRepo([usuario('4', 'ASSESSOR_RUA')]);
+    const notificationRepo = createFakeNotificationRepo();
+    const service = new NotificacaoService({ notificationRepo, userRepo });
+
+    await service.demandaCriada(demanda, '4');
+
+    expect(notificationRepo.criadas).toHaveLength(0);
   });
 });

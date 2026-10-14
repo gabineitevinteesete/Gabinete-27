@@ -31,15 +31,17 @@ export class NotificacaoService {
 
   async demandaCriada(demanda: DemandaParaAviso, criadoPorId: string): Promise<void> {
     const chefes = await this.userRepo.list({ ativo: true, role: 'CHEFE' });
-    for (const chefe of chefes) {
-      if (chefe.id === criadoPorId) continue;
-      await this.notificationRepo.create({
-        userId: chefe.id,
-        requestId: demanda.id,
-        tipo: TIPO_NOTIFICACAO.DEMANDA_NOVA,
-        mensagem: `Nova demanda ${demanda.codigoInterno} registrada.`,
-      });
-    }
+    // Uma única gravação para todos: o tempo da resposta não cresce com o número de chefes.
+    await this.notificationRepo.createMany(
+      chefes
+        .filter((chefe) => chefe.id !== criadoPorId)
+        .map((chefe) => ({
+          userId: chefe.id,
+          requestId: demanda.id,
+          tipo: TIPO_NOTIFICACAO.DEMANDA_NOVA,
+          mensagem: `Nova demanda ${demanda.codigoInterno} registrada.`,
+        })),
+    );
   }
 
   async demandaReatribuida(demanda: DemandaParaAviso, novoResponsavelId: string, reatribuidoPorId: string): Promise<void> {

@@ -76,20 +76,22 @@ describe('GET /notificacoes', () => {
     expect(deRua1.body.data.items).toHaveLength(0);
 
     // o chefe muda o status: rua1 (responsável) é avisado.
-    await request(app)
+    const statusRes = await request(app)
       .patch(`/demandas/${demanda.id}/status`)
       .set('Authorization', `Bearer ${chefe.token}`)
       .send({ novoStatus: 'RECEBIDA' });
+    expect(statusRes.status).toBe(200);
     const apos = await request(app).get('/notificacoes').set('Authorization', `Bearer ${rua1.token}`);
     expect(apos.body.data.items.map((i: { mensagem: string }) => i.mensagem)).toEqual([
       `A demanda ${demanda.codigoInterno} passou para "Recebida".`,
     ]);
 
     // o chefe reatribui para rua2: rua2 é avisado.
-    await request(app)
+    const reatribuirRes = await request(app)
       .patch(`/demandas/${demanda.id}/reatribuir`)
       .set('Authorization', `Bearer ${chefe.token}`)
       .send({ novoAssessorId: rua2.user.id });
+    expect(reatribuirRes.status).toBe(200);
     const deRua2 = await request(app).get('/notificacoes').set('Authorization', `Bearer ${rua2.token}`);
     expect(deRua2.body.data.items[0]).toMatchObject({
       tipo: 'DEMANDA_REATRIBUIDA',
@@ -127,6 +129,24 @@ describe('PATCH /notificacoes', () => {
     expect(res.status).toBe(404);
     const doChefe = await request(app).get('/notificacoes').set('Authorization', `Bearer ${chefe.token}`);
     expect(doChefe.body.data.naoLidas).toBe(2);
+  }, 120000);
+
+  it('as rotas de marcar como lido exigem autenticação', async () => {
+    const todas = await request(app).patch('/notificacoes/lidas');
+    const uma = await request(app).patch('/notificacoes/11111111-1111-1111-1111-111111111111/lida');
+
+    expect(todas.status).toBe(401);
+    expect(uma.status).toBe(401);
+  }, 30000);
+
+  it('um id que não existe responde 404', async () => {
+    const { chefe } = await prepararAvisos();
+
+    const res = await request(app)
+      .patch('/notificacoes/11111111-1111-1111-1111-111111111111/lida')
+      .set('Authorization', `Bearer ${chefe.token}`);
+
+    expect(res.status).toBe(404);
   }, 120000);
 
   it('id que não é UUID responde 400', async () => {

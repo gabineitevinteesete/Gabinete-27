@@ -28,10 +28,18 @@ export function SinoNotificacoes() {
   const [naoLidas, setNaoLidas] = useState(0);
   const [aberto, setAberto] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
+  const botaoSino = useRef<HTMLButtonElement>(null);
+  const painel = useRef<HTMLDivElement>(null);
+  // Sobe a cada busca nova e a cada marcação feita na tela: uma resposta que começou antes disso
+  // está velha e é descartada (senão desfaria a marcação ou se sobreporia a uma busca mais nova).
+  const versao = useRef(0);
 
   const carregar = useCallback(async () => {
+    versao.current += 1;
+    const minhaVersao = versao.current;
     try {
       const dados = await apiClient.request<RespostaNotificacoes>('/notificacoes', { auth: true });
+      if (minhaVersao !== versao.current) return;
       setItens(dados.items);
       setNaoLidas(dados.naoLidas);
     } catch {
@@ -41,7 +49,10 @@ export function SinoNotificacoes() {
 
   useEffect(() => {
     void carregar();
-    const timer = setInterval(() => void carregar(), INTERVALO_MS);
+    // Só com a aba visível: uma aba esquecida em segundo plano não fica renovando a sessão para sempre.
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void carregar();
+    }, INTERVALO_MS);
     const aoVoltar = () => void carregar();
     const aoFicarVisivel = () => {
       if (document.visibilityState === 'visible') void carregar();
@@ -56,12 +67,19 @@ export function SinoNotificacoes() {
   }, [carregar]);
 
   useEffect(() => {
+    if (aberto) painel.current?.focus();
+  }, [aberto]);
+
+  useEffect(() => {
     if (!aberto) return;
     const aoClicarFora = (evento: MouseEvent) => {
       if (raiz.current && !raiz.current.contains(evento.target as Node)) setAberto(false);
     };
     const aoApertarEsc = (evento: KeyboardEvent) => {
-      if (evento.key === 'Escape') setAberto(false);
+      if (evento.key === 'Escape') {
+        setAberto(false);
+        botaoSino.current?.focus();
+      }
     };
     document.addEventListener('mousedown', aoClicarFora);
     document.addEventListener('keydown', aoApertarEsc);
@@ -74,6 +92,7 @@ export function SinoNotificacoes() {
   function abrirAviso(aviso: Notificacao) {
     setAberto(false);
     if (!aviso.lida) {
+      versao.current += 1;
       setItens((atual) => atual.map((item) => (item.id === aviso.id ? { ...item, lida: true } : item)));
       setNaoLidas((atual) => Math.max(0, atual - 1));
       apiClient.request(`/notificacoes/${aviso.id}/lida`, { method: 'PATCH', auth: true }).catch(() => void carregar());
@@ -82,6 +101,7 @@ export function SinoNotificacoes() {
   }
 
   function marcarTodas() {
+    versao.current += 1;
     setItens((atual) => atual.map((item) => ({ ...item, lida: true })));
     setNaoLidas(0);
     apiClient.request('/notificacoes/lidas', { method: 'PATCH', auth: true }).catch(() => void carregar());
@@ -92,8 +112,10 @@ export function SinoNotificacoes() {
   return (
     <div ref={raiz} className="relative">
       <button
+        ref={botaoSino}
         type="button"
         onClick={() => setAberto((atual) => !atual)}
+        aria-controls="painel-avisos"
         aria-label={naoLidas > 0 ? `Avisos (${naoLidas} não lidos)` : 'Avisos'}
         aria-expanded={aberto}
         className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-primary-dark shadow-sm"
@@ -114,9 +136,12 @@ export function SinoNotificacoes() {
 
       {aberto && (
         <div
+          ref={painel}
+          id="painel-avisos"
+          tabIndex={-1}
           role="dialog"
           aria-label="Lista de avisos"
-          className="absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card bg-white p-2 shadow-lg"
+          className="absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card bg-white p-2 shadow-lg outline-none"
         >
           <div className="flex items-center justify-between px-2 py-1">
             <p className="text-sm font-semibold text-primary-dark">Avisos</p>
@@ -144,6 +169,7 @@ export function SinoNotificacoes() {
                     />
                     <span className="flex flex-col">
                       <span className={`text-sm ${aviso.lida ? 'text-gray-600' : 'font-medium text-gray-900'}`}>
+                        {!aviso.lida && <span className="sr-only">Não lido. </span>}
                         {aviso.mensagem}
                       </span>
                       <span className="text-xs text-gray-500">{tempoRelativo(aviso.createdAt)}</span>

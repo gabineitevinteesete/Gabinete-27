@@ -433,6 +433,9 @@ export function createFakeNotificationRepo(): NotificationRepository & {
     async create(data) {
       criadas.push(data);
     },
+    async createMany(data) {
+      criadas.push(...data);
+    },
     async listar(userId, limite) {
       const doUsuario = criadas
         .map((c, indice) => ({ c, indice }))

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import sharp from 'sharp';
 import { RequestService } from '../../src/services/request.service.js';
+import { TransicaoConcorrenteError } from '../../src/utils/request-status.js';
 import { NotificacaoService } from '../../src/services/notificacao.service.js';
 import {
   createFakeRequestTypeRepo,
@@ -142,6 +143,47 @@ describe('RequestService — avisos', () => {
     expect(requestRepo.created).toHaveLength(1);
     expect(resultado.status).toBe('ok');
     expect(erro).toHaveBeenCalled();
+  });
+
+  it('o motivo digitado ao recusar NUNCA aparece no texto do aviso', async () => {
+    const { service, notificationRepo } = build();
+    const demanda = await criar(service);
+    notificationRepo.criadas.length = 0;
+
+    const resultado = await service.mudarStatus(demanda.id, 'RECUSADA', 'SEGREDO-XYZ telefone 34 99999-0000', 'chefe-1');
+
+    expect(resultado.status).toBe('ok');
+    expect(notificationRepo.criadas).toHaveLength(1);
+    expect(notificationRepo.criadas[0]!.mensagem).toBe(`A demanda ${demanda.codigoInterno} passou para "Recusada".`);
+    expect(JSON.stringify(notificationRepo.criadas)).not.toMatch(/SEGREDO|99999/);
+  });
+
+  it('se a mudança de status perder a corrida (transição concorrente), nenhum aviso sai', async () => {
+    const { service, requestRepo, notificationRepo } = build();
+    const demanda = await criar(service);
+    notificationRepo.criadas.length = 0;
+    requestRepo.updateStatus = async () => {
+      throw new TransicaoConcorrenteError();
+    };
+
+    const resultado = await service.mudarStatus(demanda.id, 'RECEBIDA', undefined, 'chefe-1');
+
+    expect(resultado.status).toBe('transicao_invalida');
+    expect(notificationRepo.criadas).toHaveLength(0);
+  });
+
+  it('falha ao criar o aviso na reatribuição também não derruba a ação e é registrada no log', async () => {
+    const { service, notificationRepo } = build();
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const demanda = await criar(service);
+    notificationRepo.create = async () => {
+      throw new Error('banco fora do ar');
+    };
+
+    const resultado = await service.reatribuir(demanda.id, 'rua-2', 'chefe-1');
+
+    expect(resultado.status).toBe('ok');
+    expect(erro).toHaveBeenCalledTimes(1);
   });
 
   it('sem o serviço de avisos o comportamento é o de sempre', async () => {

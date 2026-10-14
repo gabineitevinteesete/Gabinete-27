@@ -144,17 +144,110 @@ describe('SinoNotificacoes', () => {
     expect(screen.getByRole('button', { name: 'Avisos (1 não lidos)' })).toBeInTheDocument();
   });
 
-  it('busca de novo a cada 60 segundos', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+  it('busca de novo a cada 60 segundos, exatamente', async () => {
+    vi.useFakeTimers();
     responder([], 0);
     render(<SinoNotificacoes />);
-    await waitFor(() => expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(59_999);
+    });
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(2);
+  });
+
+  it('com a aba em segundo plano não busca a cada 60 s; ao voltar a ficar visível busca na hora', async () => {
+    vi.useFakeTimers();
+    responder([], 0);
+    render(<SinoNotificacoes />);
+    const estado = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(1);
+
+    estado.mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(2);
+    estado.mockRestore();
+  });
+
+  it('ao desmontar para de buscar (intervalo e escutas removidos)', async () => {
+    vi.useFakeTimers();
+    responder([], 0);
+    const { unmount } = render(<SinoNotificacoes />);
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(1);
+
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180_000);
+      window.dispatchEvent(new Event('online'));
+      document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(vi.mocked(apiClient.request).mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(vi.mocked(apiClient.request)).toHaveBeenCalledTimes(1);
+  });
+
+  it('uma resposta antiga que chega depois da marcação não desfaz a marcação na tela', async () => {
+    let entregarAntiga: (valor: unknown) => void = () => {};
+    let primeira = true;
+    vi.mocked(apiClient.request).mockImplementation(((url: string, opcoes?: { method?: string }) => {
+      if (url === '/notificacoes' && !opcoes?.method) {
+        if (primeira) {
+          primeira = false;
+          return Promise.resolve({ items: [aviso('1')], naoLidas: 1 });
+        }
+        return new Promise((resolve) => (entregarAntiga = resolve));
+      }
+      return Promise.resolve({ ok: true });
+    }) as unknown as typeof apiClient.request);
+
+    render(<SinoNotificacoes />);
+    await screen.findByRole('button', { name: 'Avisos (1 não lidos)' });
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Avisos/ }));
+    fireEvent.click(screen.getByText('Nova demanda GD-1 registrada.'));
+    expect(screen.getByRole('button', { name: 'Avisos' })).toBeInTheDocument();
+
+    await act(async () => {
+      entregarAntiga({ items: [aviso('1')], naoLidas: 1 });
+    });
+
+    expect(screen.getByRole('button', { name: 'Avisos' })).toBeInTheDocument();
+  });
+
+  it('a lista mostra "não lido" para leitor de tela, o tempo relativo e não fecha ao clicar dentro', async () => {
+    responder([aviso('1'), aviso('2', { lida: true })], 1);
+    render(<SinoNotificacoes />);
+    fireEvent.click(await screen.findByRole('button', { name: /Avisos/ }));
+
+    expect(screen.getAllByText('Não lido.', { exact: false })).toHaveLength(1);
+    expect(screen.getAllByText('agora')).toHaveLength(2);
+    fireEvent.mouseDown(screen.getByRole('dialog'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Avisos/ })).toHaveAttribute('aria-controls', 'painel-avisos');
+  });
+
+  it('o foco vai para a lista ao abrir e volta para o sino ao fechar com Esc', async () => {
+    responder([aviso('1')], 1);
+    render(<SinoNotificacoes />);
+    const sino = await screen.findByRole('button', { name: /Avisos/ });
+
+    fireEvent.click(sino);
+    expect(screen.getByRole('dialog')).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(sino).toHaveFocus();
   });
 
   it('um aviso novo que chega na busca seguinte atualiza o contador', async () => {
