@@ -6,11 +6,17 @@ formulários de papel preenchidos pelos assessores durante atendimentos de rua.
 Este repositório é construído em fases. Specs e planos de cada fase ficam em
 [`docs/superpowers/`](docs/superpowers).
 
-- Fase 1 (esta) — Fundação: schema completo, autenticação por telefone+PIN, papéis.
-- Fase 2 — Demandas + fotos (ViaCEP, Cloudinary, listagem/filtros).
-- Fase 3 — Painel, status e relatórios.
-- Fase 4 — PWA offline + notificações.
-- Fase 5 — Deploy em produção (Vercel + Render + Neon + Cloudinary) e testes finais.
+- Fase 1 — Fundação: schema completo, autenticação por telefone+PIN, papéis. **Pronta.**
+- Fase 2 — Demandas + fotos (ViaCEP, Cloudinary, listagem/filtros). **Pronta.**
+- Fase 3 — Fluxo de status, observações internas e dashboard do chefe. **Pronta.**
+- Fase 4 — Escala e mural do gabinete. **Pronta.**
+- Fase 5 — Equipe (assessores) e configurações (tipos de demanda). **Pronta.**
+- Extras já feitos — Privacidade/LGPD (aviso, auditoria, anonimização), filtros e exportação em
+  planilha (CSV) da lista de demandas, app instalável (PWA) com criação e lista de demandas sem
+  internet, e proteção contra demanda duplicada (Idempotency-Key).
+- Ainda não feitos — Notificações no app (sino), relatório em PDF e o deploy em produção
+  (Vercel + Render + Neon + Cloudinary). O roteiro de publicação está em
+  [`docs/PUBLICACAO.md`](docs/PUBLICACAO.md).
 
 ## Estrutura
 
@@ -73,21 +79,17 @@ cd backend && DATABASE_URL="<connection string do banco de TESTE>" npm test
 cd frontend && npm test
 ```
 
-**Estado atual (fim da Fase 1):** nenhum banco foi configurado neste ambiente de
-desenvolvimento ainda. Todo o código do backend foi implementado e verificado via
-`tsc --noEmit` e testes unitários com repositórios falsos (in-memory); os testes de
-integração que dependem de um Postgres real estão escritos mas não foram executados.
-Antes do primeiro uso real, configure um `DATABASE_URL` (Neon ou local), rode
-`npx prisma migrate dev --name init` para gerar e aplicar a primeira migração, e então
-rode a suíte de testes de integração do backend para confirmar que tudo passa contra um
-banco de verdade.
+**Banco de testes:** os testes de integração do backend rodam contra um Postgres real
+(`gabinete_test`, um banco separado do de desenvolvimento). Coloque a connection string dele em
+`backend/.env.test` (arquivo ignorado pelo git). Scripts que apagam ou gravam dados devem sempre
+conferir o nome do banco antes de escrever.
 
 ## Dívida técnica conhecida
 
 - **`next@14.2.x` com 2 advisories de severidade alta e sem correção na linha 14.x.** A única
   remediação é o upgrade major para Next 15/16, que está fora do escopo da Fase 1. Decisão
   deliberada de adiar (não é um descuido): reavaliar e fazer o upgrade em uma fase posterior,
-  antes do deploy de produção da Fase 5.
+  antes do deploy de produção (ver `docs/PUBLICACAO.md`).
 
 ## Variáveis de ambiente
 
