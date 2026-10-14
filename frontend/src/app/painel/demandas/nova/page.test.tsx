@@ -113,6 +113,59 @@ describe('NovaDemandaPage', () => {
   });
 });
 
+describe('NovaDemandaPage — chave de idempotência', () => {
+  it('manda um código único no cabeçalho Idempotency-Key ao enviar', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ id: 'demanda-123' });
+
+    render(<NovaDemandaPage />);
+    await preencherCamposObrigatorios();
+    fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+
+    const chamada = vi.mocked(apiClient.request).mock.calls.find(([url]) => url === '/demandas')!;
+    const cabecalhos = (chamada[1] as { headers: Record<string, string> }).headers;
+    expect(cabecalhos['Idempotency-Key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('se o envio falhar por falta de rede, a fila guarda a demanda com o MESMO código enviado', async () => {
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<NovaDemandaPage />);
+    await preencherCamposObrigatorios();
+    fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
+    await screen.findByText(/Demanda salva no celular/);
+
+    const chamada = vi.mocked(apiClient.request).mock.calls.find(([url]) => url === '/demandas')!;
+    const chaveEnviada = (chamada[1] as { headers: Record<string, string> }).headers['Idempotency-Key'];
+    expect(adicionarPendente.mock.calls[0]![0]).toMatchObject({ id: chaveEnviada });
+  });
+
+  it('repetir o envio sem mudar o formulário reaproveita o código; mudar qualquer campo gera um novo', async () => {
+    const { ApiError } = await vi.importActual<typeof import('@/services/api-client')>('@/services/api-client');
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(400, 'Envie de 2 a 4 fotos'));
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new ApiError(502, 'Erro inesperado'));
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ id: 'demanda-1' });
+
+    render(<NovaDemandaPage />);
+    await preencherCamposObrigatorios();
+    fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
+    await screen.findByText('Envie de 2 a 4 fotos');
+    // Segundo clique com o formulário igual: é a mesma tentativa.
+    fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
+    await screen.findByText('Erro inesperado');
+    // O assessor corrige um campo: é um envio novo.
+    fireEvent.change(screen.getByLabelText(/título resumido/i), { target: { value: 'Buraco na rua (corrigido)' } });
+    fireEvent.click(screen.getByRole('button', { name: /enviar demanda/i }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+
+    const envios = vi.mocked(apiClient.request).mock.calls.filter(([url]) => url === '/demandas');
+    const chaves = envios.map((c) => (c[1] as { headers: Record<string, string> }).headers['Idempotency-Key']);
+    expect(chaves).toHaveLength(3);
+    expect(chaves[0]).toBe(chaves[1]);
+    expect(chaves[2]).not.toBe(chaves[1]);
+  });
+});
+
 describe('NovaDemandaPage — sem internet', () => {
   it('quando o envio falha por falta de rede, guarda no aparelho, avisa e limpa o formulário', async () => {
     vi.mocked(apiClient.request).mockRejectedValueOnce(new TypeError('Failed to fetch'));

@@ -41,6 +41,30 @@ describe('sincronizarFila', () => {
     expect(await listarPendentes('u1')).toHaveLength(0);
   });
 
+  it('envia o id da demanda como Idempotency-Key em cada tentativa', async () => {
+    const chave = '3f8b6a52-5d4e-4c4e-9a53-1c1f2a9d7b10';
+    await adicionarPendente({ id: chave, ...pendenteBase() });
+    vi.mocked(apiClient.request).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await sincronizarFila('u1');
+    vi.mocked(apiClient.request).mockResolvedValueOnce({ id: 'novo' });
+
+    await sincronizarFila('u1');
+
+    const chamadas = vi.mocked(apiClient.request).mock.calls;
+    expect(chamadas).toHaveLength(2);
+    expect(chamadas[0]![1]).toMatchObject({ headers: { 'Idempotency-Key': chave } });
+    expect(chamadas[1]![1]).toMatchObject({ headers: { 'Idempotency-Key': chave } });
+  });
+
+  it('item antigo com id fora do formato UUID é enviado sem o cabeçalho', async () => {
+    await adicionarPendente({ id: '1728000000000-abc123', ...pendenteBase() });
+    vi.mocked(apiClient.request).mockResolvedValue({ id: 'novo' });
+
+    await sincronizarFila('u1');
+
+    expect(vi.mocked(apiClient.request).mock.calls[0]![1]).toMatchObject({ headers: undefined });
+  });
+
   it('manda os campos de texto no FormData', async () => {
     const criado = await adicionarPendente(pendenteBase());
     const formData = montarFormData(criado);

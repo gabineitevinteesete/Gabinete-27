@@ -44,6 +44,17 @@ describe('fila-offline', () => {
     expect(lista[0]!.ultimoErro).toBeNull();
   });
 
+  it('usa o id recebido (é o código do envio) e, sem ele, gera um UUID', async () => {
+    const chave = '3f8b6a52-5d4e-4c4e-9a53-1c1f2a9d7b10';
+
+    const comId = await adicionarPendente({ id: chave, usuarioId: 'u1', campos: {}, fotos: [] });
+    const semId = await adicionarPendente({ usuarioId: 'u1', campos: {}, fotos: [] });
+
+    expect(comId.id).toBe(chave);
+    expect(semId.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect((await listarPendentes('u1')).map((i) => i.id)).toContain(chave);
+  });
+
   it('cada usuário só vê as próprias demandas', async () => {
     await adicionarPendente({ usuarioId: 'u1', campos: { tituloResumido: 'A' }, fotos: [] });
     await adicionarPendente({ usuarioId: 'u2', campos: { tituloResumido: 'B' }, fotos: [] });

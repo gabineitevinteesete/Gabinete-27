@@ -1,4 +1,5 @@
 import { apiClient, ApiError } from '@/services/api-client';
+import { ehUuid } from '@/lib/uuid';
 import { listarPendentes, marcarErro, removerPendente, type DemandaPendente } from '@/lib/fila-offline';
 
 export interface ResultadoSincronizacao {
@@ -57,7 +58,14 @@ async function enviarPendentes(usuarioId: string, resultado: ResultadoSincroniza
   const pendentes = (await listarPendentes(usuarioId)).filter((item) => item.ultimoErro === null);
   for (const pendente of pendentes) {
     try {
-      await apiClient.request('/demandas', { method: 'POST', body: montarFormData(pendente), auth: true });
+      await apiClient.request('/demandas', {
+        method: 'POST',
+        body: montarFormData(pendente),
+        auth: true,
+        // O id do item é o código do envio: o servidor reconhece o reenvio e não duplica a demanda.
+        // Itens muito antigos podem ter id fora do formato UUID; esses vão sem o cabeçalho.
+        headers: ehUuid(pendente.id) ? { 'Idempotency-Key': pendente.id } : undefined,
+      });
       await removerPendente(pendente.id);
       resultado.enviadas += 1;
     } catch (err) {

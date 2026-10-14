@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/Button';
@@ -13,6 +13,7 @@ import { maskPhone } from '@/lib/phone-mask';
 import { useAuth } from '@/hooks/use-auth';
 import { adicionarPendente } from '@/lib/fila-offline';
 import { montarFormData } from '@/lib/sincronizar-fila';
+import { gerarUuid } from '@/lib/uuid';
 import { apiClient, ApiError } from '@/services/api-client';
 import type { TipoDemanda } from '@/types/request';
 
@@ -89,6 +90,7 @@ function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void 
 
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const ultimoEnvio = useRef<{ assinatura: string; chave: string } | null>(null);
 
   useEffect(() => {
     apiClient
@@ -149,6 +151,15 @@ function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void 
       if (valor) campos[chave] = valor;
     });
     const arquivos = fotos.map((foto) => foto.blob);
+    // Código deste envio: o servidor o usa para reconhecer um reenvio (resposta perdida, fila offline)
+    // e não criar a demanda duas vezes. A fila guarda a demanda com este mesmo código. Enquanto o
+    // formulário não mudar, uma nova tentativa (ex.: depois de um 502 em que o servidor chegou a gravar)
+    // reaproveita o código; se o assessor editar qualquer coisa, é um envio novo.
+    const assinatura = JSON.stringify([campos, fotos.map((foto) => foto.id)]);
+    if (ultimoEnvio.current?.assinatura !== assinatura) {
+      ultimoEnvio.current = { assinatura, chave: gerarUuid() };
+    }
+    const chave = ultimoEnvio.current.chave;
 
     async function guardarNoAparelho() {
       if (!user) {
@@ -156,7 +167,7 @@ function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void 
         return;
       }
       try {
-        await adicionarPendente({ usuarioId: user.id, campos, fotos: arquivos });
+        await adicionarPendente({ id: chave, usuarioId: user.id, campos, fotos: arquivos });
         onSalvoOffline();
       } catch {
         setErro('Sem conexão e não foi possível guardar a demanda neste aparelho. Tente novamente.');
@@ -169,7 +180,12 @@ function FormularioNovaDemanda({ onSalvoOffline }: { onSalvoOffline: () => void 
         return;
       }
       const formData = montarFormData({ campos, fotos: arquivos });
-      const demanda = await apiClient.request<{ id: string }>('/demandas', { method: 'POST', body: formData, auth: true });
+      const demanda = await apiClient.request<{ id: string }>('/demandas', {
+        method: 'POST',
+        body: formData,
+        auth: true,
+        headers: { 'Idempotency-Key': chave },
+      });
       router.push(`/painel/demandas/${demanda.id}`);
     } catch (err) {
       if (err instanceof ApiError) {

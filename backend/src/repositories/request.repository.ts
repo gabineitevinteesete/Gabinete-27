@@ -23,6 +23,7 @@ export interface CriarRequestInput {
   assessorResponsavelId: string;
   criadoPorId: string;
   autorizacaoDados: boolean;
+  idempotencyKey?: string;
 }
 
 export interface FotoParaSalvar {
@@ -117,6 +118,7 @@ export const TEXTO_DADOS_REMOVIDOS = '[dados removidos a pedido do titular]';
 export interface RequestRepository {
   create(input: CriarRequestInput, fotos: FotoParaSalvar[]): Promise<RequestDetail>;
   findById(id: string): Promise<RequestDetail | null>;
+  findByIdempotencyKey(criadoPorId: string, idempotencyKey: string): Promise<RequestDetail | null>;
   list(filtro: ListarFiltro, paginacao: Paginacao): Promise<{ items: RequestSummary[]; total: number }>;
   update(id: string, input: EditarRequestInput): Promise<RequestDetail>;
   updateStatus(id: string, novoStatus: RequestStatusValue, usuarioId: string, motivo?: string): Promise<RequestDetail>;
@@ -191,6 +193,7 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
           assessorResponsavelId: input.assessorResponsavelId,
           criadoPorId: input.criadoPorId,
           autorizacaoDados: input.autorizacaoDados,
+          idempotencyKey: input.idempotencyKey,
           consentimento: {
             create: {
               autorizado: input.autorizacaoDados,
@@ -211,6 +214,14 @@ export function createRequestRepository(prisma: PrismaClient): RequestRepository
         include: INCLUDE_DETALHE,
       });
       return toDetail(criado);
+    },
+
+    async findByIdempotencyKey(criadoPorId, idempotencyKey) {
+      const encontrado = await prisma.request.findUnique({
+        where: { criadoPorId_idempotencyKey: { criadoPorId, idempotencyKey } },
+        include: INCLUDE_DETALHE,
+      });
+      return encontrado ? toDetail(encontrado) : null;
     },
 
     async findById(id) {

@@ -139,6 +139,9 @@ model Request {
   status                 RequestStatus @default(RASCUNHO)
   numeroProtocolo        String?
   autorizacaoDados       Boolean       @default(false)
+  // Código do envio (cabeçalho Idempotency-Key): um reenvio do mesmo usuário com o mesmo código
+  // devolve a demanda já criada em vez de criar outra. Nulo nas demandas antigas.
+  idempotencyKey         String?
   arquivadoEm            DateTime?     @db.Timestamptz(3)
   createdAt              DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime      @updatedAt @db.Timestamptz(3)
@@ -150,6 +153,7 @@ model Request {
   consentimento PrivacyConsent?
   reatribuicoes RequestReassignmentHistory[]
 
+  @@unique([criadoPorId, idempotencyKey])
   @@index([status])
   @@index([bairro])
   @@index([assessorResponsavelId])

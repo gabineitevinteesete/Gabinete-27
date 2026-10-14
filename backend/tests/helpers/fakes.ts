@@ -237,6 +237,8 @@ export function createFakeRequestRepo(): RequestRepository & {
   const created: { input: CriarRequestInput; fotos: FotoParaSalvar[] }[] = [];
   const store: RequestDetail[] = [];
   let contador = 0;
+  // chave de idempotência (usuário:chave) -> id da demanda criada
+  const chaves = new Map<string, string>();
   const historicoStatus: FakeHistoricoStatus[] = [];
   const historicoReatribuicao: FakeHistoricoReatribuicao[] = [];
 
@@ -282,10 +284,15 @@ export function createFakeRequestRepo(): RequestRepository & {
           alturaPx: f.alturaPx,
         })),
       };
+      if (input.idempotencyKey) chaves.set(`${input.criadoPorId}:${input.idempotencyKey}`, detalhe.id);
       store.push(detalhe);
       return detalhe;
     },
     async findById(id) {
+      return store.find((r) => r.id === id) ?? null;
+    },
+    async findByIdempotencyKey(criadoPorId, idempotencyKey) {
+      const id = chaves.get(`${criadoPorId}:${idempotencyKey}`);
       return store.find((r) => r.id === id) ?? null;
     },
     async list(filtro: ListarFiltro, paginacao: Paginacao) {
