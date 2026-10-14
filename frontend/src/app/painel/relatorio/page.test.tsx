@@ -155,6 +155,71 @@ describe('RelatorioPage', () => {
     expect(screen.queryByText('Relatório de demandas')).not.toBeInTheDocument();
   });
 
+  it('quando o período fica inválido durante a busca, não sobra "Carregando…" nem erro antigo', async () => {
+    let entregar: (valor: unknown) => void = () => {};
+    vi.mocked(apiClient.request).mockImplementation(() => new Promise((resolve) => (entregar = resolve)));
+    render(<RelatorioPage />);
+    expect(await screen.findByText('Carregando…')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2026-09-01' } });
+
+    expect(screen.getByText('A data final não pode ser anterior à inicial.')).toBeInTheDocument();
+    expect(screen.queryByText('Carregando…')).not.toBeInTheDocument();
+    entregar(relatorio());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.queryByText('Relatório de demandas')).not.toBeInTheDocument();
+  });
+
+  it('uma resposta de período antigo que chega depois da nova escolha é descartada', async () => {
+    const pendentes: ((valor: unknown) => void)[] = [];
+    vi.mocked(apiClient.request).mockImplementation(() => new Promise((resolve) => pendentes.push(resolve)));
+    render(<RelatorioPage />);
+    await waitFor(() => expect(pendentes).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-09-01' } });
+    await waitFor(() => expect(pendentes).toHaveLength(2));
+    pendentes[1]!(relatorio({ de: '2026-09-01', ate: '2026-10-14', total: 99 }));
+    await screen.findByText('99', { selector: 'p' });
+
+    pendentes[0]!(relatorio({ total: 1 }));
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(screen.getByText('99', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.queryByText('1', { selector: 'p' })).not.toBeInTheDocument();
+  });
+
+  it('assessores com o mesmo nome e um bairro chamado "Outros" aparecem sem perder linhas', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue(
+      relatorio({
+        porAssessor: [
+          { assessorId: 'a1', assessorNome: 'João Silva', quantidade: 3 },
+          { assessorId: 'a2', assessorNome: 'João Silva', quantidade: 2 },
+        ],
+        porBairro: [
+          // 14 bairros + um bairro de verdade chamado "Outros" (15º) + "Zeta" (16º, vira a linha "Outros" somada).
+          ...Array.from({ length: 14 }, (_, i) => ({ bairro: `B${i}`, quantidade: 10 - (i % 3) })),
+          { bairro: 'Outros', quantidade: 2 },
+          { bairro: 'Zeta', quantidade: 1 },
+        ],
+      }),
+    );
+
+    render(<RelatorioPage />);
+
+    const assessores = (await screen.findByText('Por assessor responsável')).closest('section')!;
+    expect(within(assessores).getAllByText('João Silva')).toHaveLength(2);
+    const bairros = screen.getByText('Por bairro').closest('section')!;
+    expect(within(bairros).getAllByText('Outros')).toHaveLength(2);
+  });
+
+  it('o URL usa os parâmetros codificados e as tabelas têm legenda para leitor de tela', async () => {
+    render(<RelatorioPage />);
+    await screen.findByText('Relatório de demandas');
+
+    expect(chamadas()[0]).toBe('/dashboard/relatorio?de=2026-10-01&ate=2026-10-14');
+    expect(screen.getByRole('table', { name: 'Por tipo de demanda' })).toBeInTheDocument();
+  });
+
   it('erro de rede mostra a mensagem genérica', async () => {
     vi.mocked(apiClient.request).mockRejectedValue(new TypeError('Failed to fetch'));
 

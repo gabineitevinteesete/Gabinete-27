@@ -23,7 +23,7 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="flex min-h-screen bg-fundo">
+    <div className="flex min-h-screen bg-fundo print:min-h-0">
       <Sidebar role={user.role} />
       <main className="flex-1 px-4 py-6 pb-20 md:pb-6 print:p-0">
         <div className="mb-3 flex justify-end print:hidden">

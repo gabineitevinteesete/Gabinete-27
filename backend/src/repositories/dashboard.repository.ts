@@ -159,8 +159,9 @@ export function createDashboardRepository(prisma: PrismaClient): DashboardReposi
         status,
         quantidade: porStatusRaw.find((r) => r.status === status)?._count ?? 0,
       }));
-      const maiorPrimeiro = <T extends { quantidade: number }>(lista: T[]) =>
-        lista.sort((a, b) => b.quantidade - a.quantidade);
+      // Maior primeiro; empate em ordem alfabética, para o mesmo período dar sempre o mesmo relatório.
+      const maiorPrimeiro = <T extends { quantidade: number }>(lista: T[], nome: (item: T) => string) =>
+        lista.sort((a, b) => b.quantidade - a.quantidade || nome(a).localeCompare(nome(b), 'pt-BR'));
 
       return {
         total: porStatus.reduce((soma, item) => soma + item.quantidade, 0),
@@ -170,17 +171,23 @@ export function createDashboardRepository(prisma: PrismaClient): DashboardReposi
             tipo: tipos.find((x) => x.id === t.requestTypeId)?.nome ?? 'Tipo removido',
             quantidade: t._count,
           })),
+          (item) => item.tipo,
         ),
-        // "Sem bairro" agrupa os nulos; um bairro digitado como vazio também cai aqui.
+        // "Sem bairro" agrupa os nulos e os vazios. Espaços nas pontas e maiúsculas/minúsculas não
+        // criam linhas separadas ("Centro", "Centro " e "centro" são o mesmo bairro).
         porBairro: maiorPrimeiro(
           Array.from(
             porBairroRaw
               .reduce((mapa, linha) => {
-                const nome = linha.bairro?.trim() ? linha.bairro : 'Sem bairro';
-                return mapa.set(nome, (mapa.get(nome) ?? 0) + linha._count);
-              }, new Map<string, number>())
-              .entries(),
-          ).map(([bairro, quantidade]) => ({ bairro, quantidade })),
+                const limpo = linha.bairro?.trim() ?? '';
+                const nome = limpo || 'Sem bairro';
+                const chave = nome.toLocaleLowerCase('pt-BR');
+                const atual = mapa.get(chave);
+                return mapa.set(chave, { bairro: atual?.bairro ?? nome, quantidade: (atual?.quantidade ?? 0) + linha._count });
+              }, new Map<string, { bairro: string; quantidade: number }>())
+              .values(),
+          ),
+          (item) => item.bairro,
         ),
         porAssessor: maiorPrimeiro(
           porAssessorRaw.map((a) => ({
@@ -188,6 +195,7 @@ export function createDashboardRepository(prisma: PrismaClient): DashboardReposi
             assessorNome: assessores.find((x) => x.id === a.assessorResponsavelId)?.nome ?? 'Usuário removido',
             quantidade: a._count,
           })),
+          (item) => item.assessorNome,
         ),
       };
     },

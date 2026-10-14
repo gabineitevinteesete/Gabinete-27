@@ -7,8 +7,9 @@ export const produtividadeQuerySchema = z.object({
 
 export const relatorioQuerySchema = z
   .object({
-    de: z.string({ required_error: 'Informe a data inicial (de).' }),
-    ate: z.string({ required_error: 'Informe a data final (ate).' }),
+    // invalid_type_error cobre parâmetro repetido (?de=a&de=b) ou aninhado (?de[x]=1): vira array/objeto.
+    de: z.string({ required_error: 'Informe a data inicial (de).', invalid_type_error: 'Data inicial inválida.' }),
+    ate: z.string({ required_error: 'Informe a data final (ate).', invalid_type_error: 'Data final inválida.' }),
   })
   .superRefine((valor, ctx) => {
     const dias = diasDoPeriodo(valor.de, valor.ate);

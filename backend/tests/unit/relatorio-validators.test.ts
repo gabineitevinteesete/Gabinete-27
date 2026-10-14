@@ -25,6 +25,11 @@ describe('relatorioQuerySchema', () => {
     expect(mensagem({ de: '2026-10-01', ate: 'amanhã' })).toBe('Datas inválidas. Use o formato AAAA-MM-DD.');
   });
 
+  it('parâmetro repetido ou aninhado vira mensagem em português, não "Expected string"', () => {
+    expect(mensagem({ de: ['2026-10-01', '2026-10-02'], ate: '2026-10-31' })).toBe('Data inicial inválida.');
+    expect(mensagem({ de: '2026-10-01', ate: { x: '1' } })).toBe('Data final inválida.');
+  });
+
   it('recusa data final antes da inicial', () => {
     expect(mensagem({ de: '2026-10-14', ate: '2026-10-13' })).toBe('A data final não pode ser anterior à inicial.');
   });

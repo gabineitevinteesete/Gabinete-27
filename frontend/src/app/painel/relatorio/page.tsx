@@ -25,7 +25,7 @@ function periodoPadrao(): { de: string; ate: string } {
 function contarDias(de: string, ate: string): number | null {
   const inicio = Date.parse(`${de}T00:00:00Z`);
   const fim = Date.parse(`${ate}T00:00:00Z`);
-  if (!de || !ate || Number.isNaN(inicio) || Number.isNaN(fim)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate) || Number.isNaN(inicio) || Number.isNaN(fim)) return null;
   return Math.round((fim - inicio) / DIA_MS) + 1;
 }
 
@@ -49,16 +49,21 @@ function Tabela({
       {linhas.length === 0 ? (
         <p className="text-sm text-gray-500">Nenhuma demanda no período.</p>
       ) : (
-        <table className="w-full text-sm">
+        <table aria-label={titulo} className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-xs text-gray-600">
-              <th className="py-1 font-medium">{colunaNome}</th>
-              <th className="py-1 text-right font-medium">Demandas</th>
+              <th scope="col" className="py-1 font-medium">
+                {colunaNome}
+              </th>
+              <th scope="col" className="py-1 text-right font-medium">
+                Demandas
+              </th>
             </tr>
           </thead>
           <tbody>
-            {linhas.map((linha) => (
-              <tr key={linha.nome} className="border-b border-gray-100">
+            {linhas.map((linha, indice) => (
+              // Nomes podem repetir (dois assessores iguais, um bairro chamado "Outros"): o índice desempata.
+              <tr key={`${indice}-${linha.nome}`} className="border-b border-gray-100">
                 <td className="py-1">{linha.nome}</td>
                 <td className="py-1 text-right font-medium">{linha.quantidade}</td>
               </tr>
@@ -92,13 +97,19 @@ export default function RelatorioPage() {
   const ehChefe = user?.role === 'CHEFE';
 
   useEffect(() => {
-    if (!ehChefe || aviso !== null) return;
+    if (!ehChefe) return;
+    if (aviso !== null) {
+      // Período inválido: nada em andamento nem erro antigo na tela, só o aviso.
+      setCarregando(false);
+      setErro(null);
+      return;
+    }
     // Ignora respostas de períodos antigos que cheguem depois de uma escolha mais nova.
     let ativo = true;
     setCarregando(true);
     setErro(null);
     apiClient
-      .request<RelatorioPeriodo>(`/dashboard/relatorio?de=${de}&ate=${ate}`, { auth: true })
+      .request<RelatorioPeriodo>(`/dashboard/relatorio?${new URLSearchParams({ de, ate }).toString()}`, { auth: true })
       .then((resposta) => {
         if (!ativo) return;
         setDados(resposta);
@@ -165,9 +176,21 @@ export default function RelatorioPage() {
             Imprimir / salvar em PDF
           </button>
         </div>
-        {aviso && <p className="text-sm text-red-600">{aviso}</p>}
-        {erro && <p className="text-sm text-red-600">{erro}</p>}
-        {carregando && <p className="text-sm text-gray-500">Carregando…</p>}
+        {aviso && (
+          <p role="alert" className="text-sm text-red-600">
+            {aviso}
+          </p>
+        )}
+        {erro && (
+          <p role="alert" className="text-sm text-red-600">
+            {erro}
+          </p>
+        )}
+        {carregando && (
+          <p role="status" className="text-sm text-gray-500">
+            Carregando…
+          </p>
+        )}
       </div>
 
       {dados && aviso === null && (

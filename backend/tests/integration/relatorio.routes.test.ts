@@ -145,6 +145,40 @@ describe('GET /dashboard/relatorio', () => {
     expect(res.body.data.porStatus.every((s: { quantidade: number }) => s.quantidade === 0)).toBe(true);
   }, 60000);
 
+  it('as mensagens de erro vêm limpas, em português e sem prefixo de campo', async () => {
+    const chefe = await login('CHEFE', '+5534999996051');
+    const auth = { Authorization: `Bearer ${chefe.token}` };
+
+    const invertido = await request(app).get('/dashboard/relatorio?de=2026-10-31&ate=2026-10-01').set(auth);
+    const repetido = await request(app).get('/dashboard/relatorio?de=2026-10-01&de=2026-10-02&ate=2026-10-31').set(auth);
+    const faltando = await request(app).get('/dashboard/relatorio?de=2026-10-01').set(auth);
+
+    expect(invertido.body.error).toBe('A data final não pode ser anterior à inicial.');
+    expect(repetido.body.error).toBe('Data inicial inválida.');
+    expect(faltando.body.error).toBe('Informe a data final (ate).');
+  }, 60000);
+
+  it('bairros com espaço nas pontas ou maiúsculas diferentes contam como o mesmo; empates saem em ordem alfabética', async () => {
+    const chefe = await login('CHEFE', '+5534999996061');
+    const ana = await login('ASSESSOR_RUA', '+5534999996062', 'Ana Rua');
+    const tipo = await testPrisma.requestType.create({ data: { nome: 'Tapa-buraco', ativo: true, exigeDescricaoObrigatoria: false } });
+    for (const bairro of ['Centro', 'Centro ', 'centro', 'Zona Sul', 'Alto', '', '   ']) {
+      await criarDemanda({ tipoId: tipo.id, responsavelId: ana.user.id, criadaEm: '2026-10-10T10:00:00-03:00', bairro });
+    }
+
+    const res = await request(app)
+      .get('/dashboard/relatorio')
+      .query({ de: '2026-10-01', ate: '2026-10-31' })
+      .set('Authorization', `Bearer ${chefe.token}`);
+
+    expect(res.body.data.porBairro).toEqual([
+      { bairro: 'Centro', quantidade: 3 },
+      { bairro: 'Sem bairro', quantidade: 2 },
+      { bairro: 'Alto', quantidade: 1 },
+      { bairro: 'Zona Sul', quantidade: 1 },
+    ]);
+  }, 120000);
+
   it.each([
     [{ de: '2026-10-01' }, 400],
     [{ de: '2026-10-31', ate: '2026-10-01' }, 400],
