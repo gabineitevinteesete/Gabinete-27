@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Sidebar } from '@/components/Sidebar';
 import { MobileNav } from '@/components/MobileNav';
 import { BarraPendentes } from '@/components/BarraPendentes';
+import { SinoNotificacoes } from '@/components/SinoNotificacoes';
 
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -25,6 +26,9 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
     <div className="flex min-h-screen bg-fundo">
       <Sidebar role={user.role} />
       <main className="flex-1 px-4 py-6 pb-20 md:pb-6">
+        <div className="mb-3 flex justify-end">
+          <SinoNotificacoes />
+        </div>
         <BarraPendentes />
         {children}
       </main>

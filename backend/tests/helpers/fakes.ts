@@ -16,6 +16,7 @@ import {
 } from '../../src/repositories/request.repository.js';
 import { transicaoValida, TransicaoConcorrenteError, type RequestStatusValue } from '../../src/utils/request-status.js';
 import { randomUUID } from 'node:crypto';
+import type { NotificationRepository, NotificacaoItem } from '../../src/repositories/notification.repository.js';
 import type { InternalNoteRepository, InternalNoteItem } from '../../src/repositories/internal-note.repository.js';
 
 type StoredUser = PublicUser & { pinHash: string | null };
@@ -418,6 +419,48 @@ export function createFakeInternalNoteRepo(): InternalNoteRepository & { store: 
     async delete(id) {
       const indice = store.findIndex((n) => n.id === id);
       if (indice !== -1) store.splice(indice, 1);
+    },
+  };
+}
+
+export function createFakeNotificationRepo(): NotificationRepository & {
+  criadas: { userId: string; requestId?: string; tipo: string; mensagem: string }[];
+} {
+  const criadas: { userId: string; requestId?: string; tipo: string; mensagem: string }[] = [];
+  const lidas = new Set<number>();
+  return {
+    criadas,
+    async create(data) {
+      criadas.push(data);
+    },
+    async createMany(data) {
+      criadas.push(...data);
+    },
+    async listar(userId, limite) {
+      const doUsuario = criadas
+        .map((c, indice) => ({ c, indice }))
+        .filter(({ c }) => c.userId === userId)
+        .reverse();
+      const items: NotificacaoItem[] = doUsuario.slice(0, limite).map(({ c, indice }) => ({
+        id: `aviso-${indice}`,
+        requestId: c.requestId ?? null,
+        tipo: c.tipo,
+        mensagem: c.mensagem,
+        lida: lidas.has(indice),
+        createdAt: new Date(),
+      }));
+      return { items, naoLidas: doUsuario.filter(({ indice }) => !lidas.has(indice)).length };
+    },
+    async marcarLida(id, userId) {
+      const indice = Number(id.replace('aviso-', ''));
+      if (!criadas[indice] || criadas[indice]!.userId !== userId) return false;
+      lidas.add(indice);
+      return true;
+    },
+    async marcarTodasLidas(userId) {
+      criadas.forEach((c, indice) => {
+        if (c.userId === userId) lidas.add(indice);
+      });
     },
   };
 }

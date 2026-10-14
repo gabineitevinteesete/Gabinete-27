@@ -7,6 +7,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 
+// O sino tem testes próprios; aqui só interessa que o layout o mostra.
+vi.mock('@/components/SinoNotificacoes', () => ({ SinoNotificacoes: () => <button type="button">Sino</button> }));
+
 const useAuthMock = vi.fn();
 vi.mock('@/hooks/use-auth', () => ({
   useAuth: () => useAuthMock(),
@@ -35,6 +38,7 @@ describe('PainelLayout', () => {
     render(<PainelLayout>conteúdo do painel</PainelLayout>);
 
     expect(await screen.findByText('conteúdo do painel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sino' })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
 
