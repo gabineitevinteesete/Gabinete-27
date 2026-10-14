@@ -1,4 +1,10 @@
-import type { DashboardRepository, ResumoDashboard, ProdutividadeAssessor } from '../repositories/dashboard.repository.js';
+import type {
+  DashboardRepository,
+  ResumoDashboard,
+  ProdutividadeAssessor,
+  RelatorioPeriodo,
+} from '../repositories/dashboard.repository.js';
+import { intervaloBrasilia } from '../utils/periodo.js';
 
 export class DashboardService {
   private dashboardRepo: DashboardRepository;
@@ -9,6 +15,13 @@ export class DashboardService {
 
   async resumo(): Promise<ResumoDashboard> {
     return this.dashboardRepo.resumo();
+  }
+
+  /** `de` e `ate` no formato AAAA-MM-DD (já validados); o período é o de Brasília, os dois dias inclusos. */
+  async relatorio(de: string, ate: string): Promise<RelatorioPeriodo & { de: string; ate: string }> {
+    const { inicio, fimExclusivo } = intervaloBrasilia(de, ate);
+    const dados = await this.dashboardRepo.relatorioPeriodo(inicio, fimExclusivo);
+    return { de, ate, ...dados };
   }
 
   /** `mes` no formato "YYYY-MM"; sem valor, usa o mês corrente. */

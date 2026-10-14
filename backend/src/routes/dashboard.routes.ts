@@ -17,6 +17,7 @@ export function createDashboardRouter(deps: { dashboardService: DashboardService
 
   router.use(auth, soChefe);
   router.get('/resumo', asyncHandler(controller.resumo));
+  router.get('/relatorio', asyncHandler(controller.relatorio));
   router.get('/produtividade-assessores', asyncHandler(controller.produtividadeAssessores));
 
   return router;

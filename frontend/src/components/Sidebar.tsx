@@ -14,6 +14,7 @@ const ITENS: ItemMenu[] = [
   { href: '/painel/demandas', label: 'Demandas' },
   { href: '/painel/escala', label: 'Escala' },
   { href: '/painel/dashboard', label: 'Dashboard', somenteChefe: true },
+  { href: '/painel/relatorio', label: 'Relatório', somenteChefe: true },
   { href: '/painel/assessores', label: 'Assessores', somenteChefe: true },
   { href: '/painel/configuracoes', label: 'Configurações', somenteChefe: true },
   { href: '/painel/privacidade', label: 'Privacidade', somenteChefe: true },
@@ -23,7 +24,7 @@ export function Sidebar({ role }: { role: UserRoleValue }) {
   const itensVisiveis = ITENS.filter((item) => !item.somenteChefe || role === 'CHEFE');
 
   return (
-    <aside className="hidden w-56 flex-col bg-primary-dark p-4 text-white md:flex">
+    <aside className="hidden w-56 flex-col bg-primary-dark p-4 text-white md:flex print:hidden">
       <p className="mb-6 px-2 text-base font-semibold">Gabinete digital</p>
       <nav className="flex flex-col gap-1">
         {itensVisiveis.map((item) => (

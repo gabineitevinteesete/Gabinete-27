@@ -111,3 +111,18 @@ export interface ProdutividadeAssessor {
   porStatus: Record<RequestStatusValue, number>;
   total: number;
 }
+
+export interface ContagemTipo {
+  tipo: string;
+  quantidade: number;
+}
+
+export interface RelatorioPeriodo {
+  de: string;
+  ate: string;
+  total: number;
+  porStatus: ContagemStatus[];
+  porTipo: ContagemTipo[];
+  porBairro: ContagemBairro[];
+  porAssessor: ContagemAssessor[];
+}
