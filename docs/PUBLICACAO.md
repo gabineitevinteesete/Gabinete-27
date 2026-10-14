@@ -71,6 +71,7 @@ O seed também cria os assuntos iniciais (pode rodar de novo sem duplicar). Depo
 
 ## 8. Pendências conhecidas antes de uso real com dados de cidadãos
 
-- `next@14.2.x` tem avisos de segurança sem correção na linha 14. Planejar o upgrade para uma versão maior antes do uso amplo.
+- **Next.js 14.2.35 (última da linha 14) tem avisos de segurança** que só se resolvem na versão 15.5.24 ou maior (e isso exige React 19). Conferido em 14/10/2026: o app **não usa** os recursos afetados — `next/image`, Server Actions, middleware, rewrites, rotas de servidor, Pages Router —, todas as telas rodam no navegador e falam com o backend separado. Mesmo assim, planeje a troca de versão como uma tarefa própria. Enquanto isso: hospede o frontend na Vercel (não em servidor próprio), não adicione `next/image`, Server Actions nem rewrites sem antes atualizar, e rode `npm audit --omit=dev` de tempos em tempos.
+- Dependências do **backend** foram atualizadas em 14/10/2026 (`npm audit` sem avisos: `proxy-addr`, `qs`, `express`, `multer`, `sharp`). Rode `npm audit --omit=dev` antes de cada publicação.
 - O texto do aviso de privacidade deve ser revisado pelo responsável jurídico/encarregado de dados.
 - Não há política de exclusão automática: as demandas ficam até o chefe decidir; a anonimização manual existe em `/painel/privacidade`.
