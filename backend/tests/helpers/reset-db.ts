@@ -15,6 +15,8 @@ export async function resetDb() {
   await testPrisma.requestReassignmentHistory.deleteMany();
   await testPrisma.internalNote.deleteMany();
   await testPrisma.privacyConsent.deleteMany();
+  // notification referencia request e user com FK RESTRICT.
+  await testPrisma.notification.deleteMany();
   await testPrisma.request.deleteMany();
   await testPrisma.requestType.deleteMany();
   // dutyRosterEntry referencia users com FK — precisa ser limpa antes de user.

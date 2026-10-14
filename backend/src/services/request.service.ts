@@ -12,6 +12,7 @@ import type { UserRoleValue } from '../utils/jwt.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 import type { HistoricoStatusItem } from '../repositories/request.repository.js';
 import type { AuditLogRepository } from '../repositories/audit-log.repository.js';
+import type { NotificacaoService } from './notificacao.service.js';
 import { processarFoto } from './photo-processing.service.js';
 import { gerarCodigoInterno } from '../utils/codigo-interno.js';
 import { gerarCsv } from '../utils/csv.js';
@@ -124,6 +125,7 @@ export class RequestService {
   private photoUploader: PhotoUploader;
   private userRepo: UserRepository;
   private auditLogRepo: AuditLogRepository;
+  private notificacaoService?: NotificacaoService;
 
   constructor(deps: {
     requestRepo: RequestRepository;
@@ -131,12 +133,26 @@ export class RequestService {
     photoUploader: PhotoUploader;
     userRepo: UserRepository;
     auditLogRepo: AuditLogRepository;
+    /** Opcional: sem ele a criação/mudança de demandas funciona igual, só sem avisos no app. */
+    notificacaoService?: NotificacaoService;
   }) {
     this.requestRepo = deps.requestRepo;
     this.requestTypeRepo = deps.requestTypeRepo;
     this.photoUploader = deps.photoUploader;
     this.userRepo = deps.userRepo;
     this.auditLogRepo = deps.auditLogRepo;
+    this.notificacaoService = deps.notificacaoService;
+  }
+
+  // Avisos são secundários: depois que a ação principal deu certo, uma falha ao criar o aviso
+  // vai para o log e nunca desfaz nem derruba a ação.
+  private async avisar(criar: (servico: NotificacaoService) => Promise<void>): Promise<void> {
+    if (!this.notificacaoService) return;
+    try {
+      await criar(this.notificacaoService);
+    } catch (err) {
+      console.error('Falha ao criar aviso (a ação principal foi concluída):', err);
+    }
   }
 
   /**
@@ -261,6 +277,8 @@ export class RequestService {
       entidadeId: demanda.id,
       ip: input.ip,
     });
+
+    await this.avisar((servico) => servico.demandaCriada(demanda, input.assessorResponsavelId));
 
     return { status: 'ok', demanda: this.comFotosAssinadas(demanda) };
   }
@@ -415,6 +433,7 @@ export class RequestService {
 
     try {
       const atualizado = await this.requestRepo.updateStatus(id, novoStatus, usuarioId, motivo);
+      await this.avisar((servico) => servico.statusAlterado(atualizado, novoStatus, usuarioId));
       return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
     } catch (erro) {
       // Perdeu a corrida para outra requisição concorrente: para quem chamou é o mesmo caso
@@ -451,6 +470,7 @@ export class RequestService {
     }
 
     const atualizado = await this.requestRepo.reatribuir(id, novoAssessorId, reatribuidoPorId);
+    await this.avisar((servico) => servico.demandaReatribuida(atualizado, novoAssessorId, reatribuidoPorId));
     return { status: 'ok', demanda: this.comFotosAssinadas(atualizado) };
   }
 
