@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/use-auth';
 
 const LINKS = [
   { href: '/painel/configuracoes', titulo: 'Configurações', descricao: 'Tipos de demanda' },
+  { href: '/painel/relatorio', titulo: 'Relatório', descricao: 'Demandas por período, para imprimir ou salvar em PDF' },
   { href: '/painel/privacidade', titulo: 'Privacidade', descricao: 'Anonimizar dados de um cidadão' },
 ];
 

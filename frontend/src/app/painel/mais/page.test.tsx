@@ -13,6 +13,7 @@ describe('MaisPage', () => {
 
     expect(screen.getByRole('link', { name: /Configurações/ })).toHaveAttribute('href', '/painel/configuracoes');
     expect(screen.getByRole('link', { name: /Privacidade/ })).toHaveAttribute('href', '/painel/privacidade');
+    expect(screen.getByRole('link', { name: /Relatório/ })).toHaveAttribute('href', '/painel/relatorio');
   });
 
   it('mostra mensagem de acesso negado para quem não é chefe', () => {

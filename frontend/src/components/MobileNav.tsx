@@ -22,7 +22,7 @@ export function MobileNav({ role }: { role: UserRoleValue }) {
   const itensVisiveis = ITENS.filter((item) => !item.somenteChefe || role === 'CHEFE');
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 flex justify-around border-t border-gray-200 bg-white py-2 md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 flex justify-around border-t border-gray-200 bg-white py-2 md:hidden print:hidden">
       {itensVisiveis.map((item) => (
         <a key={item.href} href={item.href} className="px-1 py-2 text-xs text-primary-dark">
           {item.label}
