@@ -48,8 +48,23 @@ export interface ProdutividadeAssessor {
   total: number;
 }
 
+export interface ContagemTipo {
+  tipo: string;
+  quantidade: number;
+}
+
+export interface RelatorioPeriodo {
+  total: number;
+  porStatus: ContagemStatus[];
+  porTipo: ContagemTipo[];
+  porBairro: ContagemBairro[];
+  porAssessor: ContagemAssessor[];
+}
+
 export interface DashboardRepository {
   resumo(): Promise<ResumoDashboard>;
+  /** Demandas criadas em [inicio, fimExclusivo), contadas pelo status e pelo responsável de hoje. */
+  relatorioPeriodo(inicio: Date, fimExclusivo: Date): Promise<RelatorioPeriodo>;
   produtividadeAssessores(mesInicio: Date, mesFim: Date): Promise<ProdutividadeAssessor[]>;
 }
 
@@ -117,6 +132,63 @@ export function createDashboardRepository(prisma: PrismaClient): DashboardReposi
           quantidade: v.quantidade,
         })),
         paradas: paradas.sort((a, b) => b.diasParada - a.diasParada),
+      };
+    },
+
+    async relatorioPeriodo(inicio, fimExclusivo) {
+      const where = { createdAt: { gte: inicio, lt: fimExclusivo } };
+      const [porStatusRaw, porTipoRaw, porBairroRaw, porAssessorRaw] = await Promise.all([
+        prisma.request.groupBy({ by: ['status'], where, _count: true }),
+        prisma.request.groupBy({ by: ['requestTypeId'], where, _count: true }),
+        prisma.request.groupBy({ by: ['bairro'], where, _count: true }),
+        prisma.request.groupBy({ by: ['assessorResponsavelId'], where, _count: true }),
+      ]);
+
+      const [tipos, assessores] = await Promise.all([
+        prisma.requestType.findMany({
+          where: { id: { in: porTipoRaw.map((t) => t.requestTypeId) } },
+          select: { id: true, nome: true },
+        }),
+        prisma.user.findMany({
+          where: { id: { in: porAssessorRaw.map((a) => a.assessorResponsavelId) } },
+          select: { id: true, nome: true },
+        }),
+      ]);
+
+      const porStatus: ContagemStatus[] = TODOS_STATUS.map((status) => ({
+        status,
+        quantidade: porStatusRaw.find((r) => r.status === status)?._count ?? 0,
+      }));
+      const maiorPrimeiro = <T extends { quantidade: number }>(lista: T[]) =>
+        lista.sort((a, b) => b.quantidade - a.quantidade);
+
+      return {
+        total: porStatus.reduce((soma, item) => soma + item.quantidade, 0),
+        porStatus,
+        porTipo: maiorPrimeiro(
+          porTipoRaw.map((t) => ({
+            tipo: tipos.find((x) => x.id === t.requestTypeId)?.nome ?? 'Tipo removido',
+            quantidade: t._count,
+          })),
+        ),
+        // "Sem bairro" agrupa os nulos; um bairro digitado como vazio também cai aqui.
+        porBairro: maiorPrimeiro(
+          Array.from(
+            porBairroRaw
+              .reduce((mapa, linha) => {
+                const nome = linha.bairro?.trim() ? linha.bairro : 'Sem bairro';
+                return mapa.set(nome, (mapa.get(nome) ?? 0) + linha._count);
+              }, new Map<string, number>())
+              .entries(),
+          ).map(([bairro, quantidade]) => ({ bairro, quantidade })),
+        ),
+        porAssessor: maiorPrimeiro(
+          porAssessorRaw.map((a) => ({
+            assessorId: a.assessorResponsavelId,
+            assessorNome: assessores.find((x) => x.id === a.assessorResponsavelId)?.nome ?? 'Usuário removido',
+            quantidade: a._count,
+          })),
+        ),
       };
     },
 

@@ -1,12 +1,18 @@
 import type { Request, Response } from 'express';
 import type { DashboardService } from '../services/dashboard.service.js';
-import { produtividadeQuerySchema } from '../validators/dashboard.validators.js';
+import { produtividadeQuerySchema, relatorioQuerySchema } from '../validators/dashboard.validators.js';
 
 export function createDashboardController(dashboardService: DashboardService) {
   return {
     async resumo(_req: Request, res: Response) {
       const resumo = await dashboardService.resumo();
       res.json({ success: true, data: resumo });
+    },
+
+    async relatorio(req: Request, res: Response) {
+      const { de, ate } = relatorioQuerySchema.parse(req.query);
+      const resultado = await dashboardService.relatorio(de, ate);
+      res.json({ success: true, data: resultado });
     },
 
     async produtividadeAssessores(req: Request, res: Response) {
